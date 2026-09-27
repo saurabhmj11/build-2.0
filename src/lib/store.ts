@@ -15,6 +15,7 @@ import {
   MPLADS_RECORDS,
   SEED_COMPLAINTS,
   SEED_ISSUES,
+  SUBMITTER_IDS,
 } from './seed';
 
 interface StoreState {
@@ -37,6 +38,7 @@ function minutesAgoISO(minutes: number): string {
 function seedStore(): StoreState {
   const complaints: Complaint[] = SEED_COMPLAINTS.map((c) => ({
     id: c.id,
+    submitterId: SUBMITTER_IDS[c.submittedBy] ?? `PH-00000-${c.id}`,
     textOriginal: c.textOriginal,
     language: c.language,
     translationEn: c.translationEn,
@@ -137,10 +139,11 @@ function jaccardSimilarity(a: string, b: string): number {
 }
 
 function computeVerification(complaints: Complaint[]): VerificationFlags {
-  // Distinct submitters (normalized) + duplicate filers
+  // Distinct submitters (mock phone-verified identity, ARCHITECTURE.md 4a)
+  // + duplicate filers
   const byName = new Map<string, { display: string; times: number }>();
   for (const c of complaints) {
-    const key = c.submittedBy.trim().toLowerCase();
+    const key = c.submitterId || c.submittedBy.trim().toLowerCase();
     const e = byName.get(key);
     if (e) e.times += 1;
     else byName.set(key, { display: c.submittedBy, times: 1 });
@@ -163,13 +166,12 @@ function computeVerification(complaints: Complaint[]): VerificationFlags {
     const rb = find(b);
     if (ra !== rb) parent[ra] = rb;
   };
+  const submitterKey = (c: Complaint) => c.submitterId || c.submittedBy.trim().toLowerCase();
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const a = complaints[i];
       const b = complaints[j];
-      if (
-        a.submittedBy.trim().toLowerCase() === b.submittedBy.trim().toLowerCase()
-      ) {
+      if (submitterKey(a) === submitterKey(b)) {
         continue; // same person — duplicate path, not coordination
       }
       const gap = Math.abs(+new Date(a.createdAt) - +new Date(b.createdAt));
@@ -191,9 +193,7 @@ function computeVerification(complaints: Complaint[]): VerificationFlags {
   }
   let templatedGroupIdx: number[] = [];
   for (const g of groups.values()) {
-    const submitters = new Set(
-      g.map((i) => complaints[i].submittedBy.trim().toLowerCase()),
-    );
+    const submitters = new Set(g.map((i) => submitterKey(complaints[i])));
     if (g.length >= 3 && submitters.size >= 2 && g.length > templatedGroupIdx.length) {
       templatedGroupIdx = g;
     }
@@ -316,11 +316,48 @@ export function getDashboardState(): DashboardState {
     disputedCompletions: issueViews.filter((i) => i.disputed).length,
   };
 
+  // Ward hotspot stats for the inline SVG map (wards with MPLADS works are
+  // included even at zero complaints, so quiet-but-funded wards stay visible)
+  const wardAgg = new Map<
+    string,
+    { complaintCount: number; issueCount: number; topIssue: string; topPriority: number }
+  >();
+  const ensureWard = (ward: string) => {
+    let e = wardAgg.get(ward);
+    if (!e) {
+      e = { complaintCount: 0, issueCount: 0, topIssue: '', topPriority: -1 };
+      wardAgg.set(ward, e);
+    }
+    return e;
+  };
+  for (const r of MPLADS_RECORDS) ensureWard(r.ward);
+  for (const iv of issueViews) {
+    if (!iv.ward || iv.ward === 'Unknown') continue;
+    const e = ensureWard(iv.ward);
+    e.issueCount += 1;
+    e.complaintCount += iv.count;
+    if (iv.priority > e.topPriority) {
+      e.topPriority = iv.priority;
+      e.topIssue = iv.title;
+    }
+  }
+  const wardNumber = (w: string) => Number(w.replace(/[^0-9]/g, '')) || 99;
+  const wardStats = [...wardAgg.entries()]
+    .map(([ward, v]) => ({
+      ward,
+      complaintCount: v.complaintCount,
+      issueCount: v.issueCount,
+      topIssue: v.topIssue || null,
+      hasMplads: MPLADS_RECORDS.some((r) => r.ward === ward),
+    }))
+    .sort((a, b) => wardNumber(a.ward) - wardNumber(b.ward));
+
   return {
     complaints: complaintsDesc,
     issues: issueViews,
     fundSummary: computeFundSummary(issueViews, MPLADS_RECORDS),
     verificationSummary,
+    wardStats,
     livePoolRemaining: LIVE_POOL.length - store.livePoolIndex,
     totalComplaints: store.complaints.length,
     aiClassifiedCount: store.aiClassifiedCount,
@@ -388,6 +425,7 @@ export function registerComplaint(input: RegisterComplaintInput): NewComplaintRe
 
   const complaint: Complaint = {
     id,
+    submitterId: `citizen:${(input.submittedBy || 'anonymous').trim().toLowerCase()}`,
     textOriginal: input.textOriginal,
     language: input.language,
     translationEn: input.translationEn,

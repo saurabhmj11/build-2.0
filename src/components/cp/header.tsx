@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Radio, RotateCcw, Send } from 'lucide-react';
+import { Activity, Globe2, Radio, RotateCcw, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -15,6 +15,7 @@ interface HeaderProps {
   onToggleLive: (on: boolean) => void;
   onSubmitClick: () => void;
   onReset: () => void;
+  onInfraClick: () => void;
   totalComplaints: number;
   totalIssues: number;
   aiCount: number;
@@ -25,6 +26,7 @@ export function Header({
   onToggleLive,
   onSubmitClick,
   onReset,
+  onInfraClick,
   totalComplaints,
   totalIssues,
   aiCount,
@@ -86,6 +88,20 @@ export function Header({
           </Button>
 
           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={onInfraClick}
+                  size="icon"
+                  variant="outline"
+                  aria-label="Open infrastructure roadmap"
+                  className="h-9 w-9 border-slate-300"
+                >
+                  <Globe2 className="h-4 w-4" aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Open infrastructure roadmap</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

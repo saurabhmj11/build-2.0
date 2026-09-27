@@ -43,6 +43,33 @@ export const SEED_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivi
   { id: 'iss-speed-10', title: 'Speed breaker demand near Sun Shine School', category: 'Roads', ward: 'Ward 10', location: 'Main road outside Sun Shine School, Ward 10', urgency: 4 },
 ];
 
+/** Mock phone-verified submitter identities (ARCHITECTURE.md 4a):
+ *  same id = same verified citizen. Alok Ranjan ×3 and Pankaj Verma ×2
+ *  deliberately share ids — they are the manipulation cluster. */
+export const SUBMITTER_IDS: Record<string, string> = {
+  'Suresh Yadav': 'PH-98201-5112',
+  'Ramesh Gupta': 'PH-98201-5113',
+  'Meena Patil': 'PH-98201-5114',
+  'Arun Kumar': 'PH-98201-5115',
+  'Mohd. Irfan': 'PH-98201-5116',
+  'S. Banerjee': 'PH-98201-5117',
+  'Lakshmi R.': 'PH-98201-5118',
+  'Karthik S.': 'PH-98201-5119',
+  'Shanti Devi': 'PH-98201-5120',
+  'Priya Menon': 'PH-98201-5121',
+  'Devendra Singh': 'PH-98201-5122',
+  'Neha Sharma': 'PH-98201-5123',
+  'Sunil Joshi': 'PH-98201-5124',
+  'Ashok Verma': 'PH-98201-5125',
+  'Farida B.': 'PH-98201-5126',
+  'Kamla Bai': 'PH-98201-5127',
+  'R. Das': 'PH-98201-5128',
+  'Principal R. Tiwari': 'PH-98201-5129',
+  'Vikram Nair': 'PH-98201-5130',
+  'Alok Ranjan': 'PH-98201-5131', // ×3 — manipulation cluster
+  'Pankaj Verma': 'PH-98201-5132', // ×2 — manipulation cluster
+};
+
 export const SEED_COMPLAINTS: SeedComplaintSpec[] = [
   // ── Issue 1: Pothole, Ward 12 (6 complaints — the flagship cluster) ──
   {

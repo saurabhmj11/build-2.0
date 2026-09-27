@@ -5,13 +5,16 @@ import { ArrowDownUp, Inbox, ListFilter } from 'lucide-react';
 import { Header } from '@/components/cp/header';
 import { FundStrip } from '@/components/cp/fund-strip';
 import { VerificationStrip } from '@/components/cp/verification-strip';
+import { WardMap } from '@/components/cp/ward-map';
 import { LiveFeed } from '@/components/cp/live-feed';
 import { IssueCard } from '@/components/cp/issue-card';
 import { ReportDialog } from '@/components/cp/report-dialog';
 import { SubmitDialog } from '@/components/cp/submit-dialog';
+import { InfraDialog } from '@/components/cp/infra-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { DashboardState, IssueView } from '@/lib/types';
+import { CATEGORIES } from '@/lib/types';
+import { Category, DashboardState, IssueView } from '@/lib/types';
 
 export default function Home() {
   const { toast } = useToast();
@@ -21,6 +24,9 @@ export default function Home() {
   const [reportIssue, setReportIssue] = useState<IssueView | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [infraOpen, setInfraOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
+  const [wardFilter, setWardFilter] = useState<string | null>(null);
   const processingRef = useRef(false);
 
   const setProcessingBoth = useCallback((v: boolean) => {
@@ -147,6 +153,21 @@ export default function Home() {
   const liveReportIssue =
     reportIssue && state ? (state.issues.find((i) => i.id === reportIssue.id) ?? reportIssue) : null;
 
+  const presentCategories = useMemo(
+    () => CATEGORIES.filter((c) => state?.issues.some((i) => i.category === c)),
+    [state],
+  );
+
+  const visibleIssues = useMemo(
+    () =>
+      (state?.issues ?? []).filter(
+        (i) =>
+          (categoryFilter === 'All' || i.category === categoryFilter) &&
+          (!wardFilter || i.ward === wardFilter),
+      ),
+    [state, categoryFilter, wardFilter],
+  );
+
   const maxPriority = state?.issues[0]?.priority ?? 1;
 
   return (
@@ -156,6 +177,7 @@ export default function Home() {
         onToggleLive={setLiveOn}
         onSubmitClick={() => setSubmitOpen(true)}
         onReset={handleReset}
+        onInfraClick={() => setInfraOpen(true)}
         totalComplaints={state?.totalComplaints ?? 0}
         totalIssues={state?.issues.length ?? 0}
         aiCount={state?.aiClassifiedCount ?? 0}
@@ -187,6 +209,12 @@ export default function Home() {
             />
             <VerificationStrip summary={state.verificationSummary} />
 
+            <WardMap
+              stats={state.wardStats}
+              selected={wardFilter}
+              onSelect={setWardFilter}
+            />
+
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(330px,390px)_1fr]">
               <LiveFeed complaints={state.complaints.slice(0, 40)} processing={processing} />
 
@@ -207,7 +235,59 @@ export default function Home() {
                   </p>
                 </div>
 
-                {state.issues.map((issue, idx) => (
+                {/* Department filter tabs (ARCHITECTURE.md UI layer) */}
+                <div
+                  className="flex items-center gap-1.5 overflow-x-auto pb-0.5"
+                  role="tablist"
+                  aria-label="Filter issues by department category"
+                >
+                  {(['All', ...presentCategories] as const).map((cat) => {
+                    const isActive = categoryFilter === cat;
+                    const count =
+                      cat === 'All'
+                        ? state.issues.length
+                        : state.issues.filter((i) => i.category === cat).length;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setCategoryFilter(cat)}
+                        className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          isActive
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                        }`}
+                      >
+                        {cat}
+                        <span
+                          className={`ml-1 ${isActive ? 'text-emerald-300' : 'text-slate-400'}`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {wardFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setWardFilter(null)}
+                      className="ml-1 shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100"
+                    >
+                      {wardFilter} ✕
+                    </button>
+                  )}
+                </div>
+
+                {visibleIssues.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+                    No issues match this filter yet — try another department or clear
+                    the ward filter.
+                  </p>
+                )}
+
+                {visibleIssues.map((issue, idx) => (
                   <IssueCard
                     key={issue.id}
                     issue={issue}
@@ -256,6 +336,7 @@ export default function Home() {
         />
       )}
       <SubmitDialog open={submitOpen} onOpenChange={setSubmitOpen} onSubmitted={handleSubmitted} />
+      <InfraDialog open={infraOpen} onOpenChange={setInfraOpen} />
     </div>
   );
 }

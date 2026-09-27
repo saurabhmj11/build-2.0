@@ -29,6 +29,8 @@ export type MpladsStatus = 'Completed' | 'Ongoing' | 'Delayed' | 'Sanctioned –
 
 export interface Complaint {
   id: string;
+  /** mock phone-verified identity (per ARCHITECTURE.md 4a) — same id = same citizen */
+  submitterId: string;
   textOriginal: string;
   language: string;
   translationEn: string;
@@ -134,11 +136,20 @@ export interface FundSummary {
   delayedWorksCount: number;
 }
 
+export interface WardStat {
+  ward: string;
+  complaintCount: number;
+  issueCount: number;
+  topIssue: string | null;
+  hasMplads: boolean;
+}
+
 export interface DashboardState {
   complaints: Complaint[];
   issues: IssueView[];
   fundSummary: FundSummary;
   verificationSummary: VerificationSummary;
+  wardStats: WardStat[];
   livePoolRemaining: number;
   totalComplaints: number;
   aiClassifiedCount: number;

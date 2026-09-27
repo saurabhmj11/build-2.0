@@ -41,3 +41,23 @@ Stage Summary:
 - Module 4 fully implemented on both sides: citizen input defended (distinct-submitter ranking, coordination + duplicate detection) and official records defended (disputed-completion flags with physical-verification recommendation).
 - Demo now shows: speed-breaker campaign that LOOKS like a top-3 crisis drops to #5 under verified ranking; garbage issue marked DISPUTED against its "Completed" ₹6L MPLADS record.
 - All modules 1–4 green; demo reset restores seeded state (24 complaints, 8 issues, full sim queue).
+
+---
+Task ID: 3
+Agent: Super Z (main agent)
+Task: Implement updated ARCHITECTURE.md — department filter tabs, Web Speech API voice input, inline SVG ward hotspot map, submitterId mock identities, and open-infrastructure roadmap panel.
+
+Work Log:
+- types.ts: Complaint.submitterId (mock phone-verified identity per arch 4a), WardStat interface, DashboardState.wardStats.
+- seed.ts: SUBMITTER_IDS map (21 mock phone identities; Alok Ranjan ×3 and Pankaj Verma ×2 share ids — the manipulation cluster).
+- store.ts: verification now keys on submitterId (fallback: normalized name); registerComplaint derives citizen:{name} ids (same name = same identity → one citizen one vote works live); wardStats aggregation (complaint count, issue count, top issue, hasMplads per ward; MPLADS-only wards like Ward 6 stay visible at zero complaints).
+- ward-map.tsx (NEW): hand-built inline SVG 4×3 grid of 12 wards, density colors (quiet/1-2/3-5/6+), ₹ markers on MPLADS wards, native <title> tooltips, click-to-filter (keyboard accessible), selected state + clear chip, legend. No tile server, no external calls — self-contained per arch CSP constraint.
+- page.tsx: department filter tabs (All + present categories, counts, active state, overflow-x scroll on mobile), ward filter chip + empty state, WardMap wired between verification strip and main grid, InfraDialog mounted, maxPriority stays global for honest priority bars.
+- submit-dialog.tsx: real Web Speech API voice input — Speak/Stop button with live pulse indicator, 5 Indic language options (hi-IN/en-IN/ta-IN/bn-IN/mr-IN), interim+final transcript streaming into the textarea, permission-denied toast, unsupported-browser toast, cleanup on dialog close/unmount; photo stays v2 stub; production-swap note (IndicConformer) under the control.
+- infra-dialog.tsx (NEW) + header Globe2 button: two-column "Live in this demo" vs "Production roadmap" (IndicConformer-600M MIT, IndicTrans2 Apache-2.0, Bhashini, sentence-transformers, mplads.gov.in + dataful.in) with license chips and the verbatim pitch quote.
+- Verification: 12 ward cells render; Water tab + Ward-12 map click filter correctly (0 cards + empty state + clear chip); infra dialog shows all 7 roadmap items + pitch; submit dialog shows Speak/lang/OTP/ASR notes; Speak click degrades gracefully (headless has ASR but no mic — no crash, no page errors); fresh-load switch=off with no spontaneous sim runs (25s idle = still 24 complaints — confirmed no toggle bug); deliberate sim toggle grows pothole to 8 distinct AND updates the ward map live; text submission still clusters (Anonymous Hindi complaint merged into Ward 5 water); mobile 390px no overflow, SVG map renders, tabs scrollable; lint clean; final reset OK.
+
+Stage Summary:
+- Architecture doc fully realized: dept tabs, browser-native voice input, self-contained SVG hotspot map, mock submitter identities, and the open-infrastructure pitch panel are all live and browser-verified.
+- Map click-to-filter + live density updates create a new demo beat: "watch the constituency heat up as complaints arrive."
+- Incidentally validated: all 10 live-pool items processed through the LLM pipeline error-free during testing.
