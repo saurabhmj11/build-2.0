@@ -11,6 +11,7 @@ import {
   ListChecks,
   Loader2,
   ScrollText,
+  ShieldAlert,
   Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +41,7 @@ function reportToPlainText(r: Report, issue: IssueView): string {
     `Department : ${r.department}`,
     `Issue      : ${issue.title}`,
     `Ward       : ${issue.ward} (${issue.location})`,
-    `Scale      : ${issue.count} citizens · urgency ${issue.urgency}/5 · priority score ${issue.priority}`,
+    `Scale      : ${issue.count} reports · ${issue.distinctCount} distinct citizens · urgency ${issue.urgency}/5 · verified priority ${issue.priority}`,
     ``,
     `HEADLINE`,
     r.headline,
@@ -136,7 +137,9 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
               {issue.category}
             </Badge>
             <span className="text-xs font-medium text-slate-500">
-              {issue.ward} · {issue.count} citizens · urgency {issue.urgency}/5
+              {issue.ward} · {issue.count} {issue.count === 1 ? 'report' : 'reports'} ·{' '}
+              {issue.distinctCount} distinct {issue.distinctCount === 1 ? 'citizen' : 'citizens'} ·
+              urgency {issue.urgency}/5
             </span>
             {report?.aiGenerated && (
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
@@ -184,6 +187,42 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
 
             {report && (
               <>
+                {/* Two-sided verification note */}
+                {(issue.disputed ||
+                  issue.verification.coordinationSuspected ||
+                  issue.distinctCount < issue.count) && (
+                  <section
+                    aria-label="Verification layer notes"
+                    className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
+                      Verification layer
+                    </h4>
+                    <ul className="space-y-1 text-xs leading-relaxed text-slate-700">
+                      {issue.distinctCount < issue.count && (
+                        <li>
+                          • Rank uses <b>{issue.distinctCount} distinct citizens</b> of{' '}
+                          {issue.count} total reports — one citizen, one vote.
+                        </li>
+                      )}
+                      {issue.verification.coordinationSuspected && (
+                        <li className="text-amber-800">
+                          • Possible coordinated input —{' '}
+                          {issue.verification.templatedGroupSize} complaints share
+                          near-identical templated wording across different
+                          submitters. Volume treated with caution.
+                        </li>
+                      )}
+                      {issue.disputed && (
+                        <li className="font-medium text-red-700">
+                          • DISPUTED COMPLETION — {issue.disputeReason}
+                        </li>
+                      )}
+                    </ul>
+                  </section>
+                )}
+
                 {/* Executive summary */}
                 <section aria-label="Executive summary">
                   <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">

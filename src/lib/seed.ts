@@ -37,6 +37,10 @@ export const SEED_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivi
   { id: 'iss-drain-5', title: 'Drain overflow entering homes', category: 'Sanitation', ward: 'Ward 5', location: 'Old drainage line, Ward 5', urgency: 5 },
   { id: 'iss-school-7', title: 'Broken school boundary wall', category: 'Education', ward: 'Ward 7', location: 'Govt Primary School, Ward 7', urgency: 4 },
   { id: 'iss-cattle-11', title: 'Stray cattle on main road', category: 'Safety', ward: 'Ward 11', location: 'Main market road, Ward 11', urgency: 2 },
+  // Module 4a demo: manipulation cluster — 5 reports, only 2 distinct submitters,
+  // near-identical templated wording. Raw volume would score this 20 (top-3);
+  // verified ranking scores it 8. Both anti-manipulation checks fire on it.
+  { id: 'iss-speed-10', title: 'Speed breaker demand near Sun Shine School', category: 'Roads', ward: 'Ward 10', location: 'Main road outside Sun Shine School, Ward 10', urgency: 4 },
 ];
 
 export const SEED_COMPLAINTS: SeedComplaintSpec[] = [
@@ -224,6 +228,53 @@ export const SEED_COMPLAINTS: SeedComplaintSpec[] = [
     category: 'Safety', urgency: 2, ward: 'Ward 11', location: 'Main market road, Ward 11',
     source: 'App', submittedBy: 'Vikram Nair', minutesAgo: 460,
   },
+
+  // ── Issue 8: Speed breaker "campaign", Ward 10 (5 reports, 2 people, templated) ──
+  {
+    id: 'c-020', issueId: 'iss-speed-10',
+    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+    language: 'Hindi',
+    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+    summaryEn: 'Urgent demand: speed breaker outside Sun Shine School, Ward 10',
+    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+    source: 'WhatsApp', submittedBy: 'Alok Ranjan', minutesAgo: 58,
+  },
+  {
+    id: 'c-021', issueId: 'iss-speed-10',
+    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+    language: 'Hindi',
+    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+    summaryEn: 'Urgent demand: speed breaker outside Sun Shine School, Ward 10',
+    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+    source: 'WhatsApp', submittedBy: 'Alok Ranjan', minutesAgo: 51,
+  },
+  {
+    id: 'c-022', issueId: 'iss-speed-10',
+    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। बस स्टॉप भी पास है। कृपया जल्द काम कराएं।',
+    language: 'Hindi',
+    translationEn: 'Respected Sir, urgent need for a speed breaker on the main road outside Sun Shine School, Ward 10. Children face accident risk daily. The bus stop is also nearby. Please get it done soon.',
+    summaryEn: 'Speed breaker demand outside Sun Shine School — bus stop nearby',
+    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+    source: 'Phone', submittedBy: 'Alok Ranjan', minutesAgo: 44,
+  },
+  {
+    id: 'c-023', issueId: 'iss-speed-10',
+    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+    language: 'Hindi',
+    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+    summaryEn: 'Urgent demand: speed breaker outside Sun Shine School, Ward 10',
+    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+    source: 'WhatsApp', submittedBy: 'Pankaj Verma', minutesAgo: 33,
+  },
+  {
+    id: 'c-024', issueId: 'iss-speed-10',
+    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया तुरंत काम कराएं।',
+    language: 'Hindi',
+    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done immediately.',
+    summaryEn: 'Urgent demand: speed breaker outside Sun Shine School, Ward 10',
+    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+    source: 'WhatsApp', submittedBy: 'Pankaj Verma', minutesAgo: 27,
+  },
 ];
 
 /**
@@ -248,13 +299,13 @@ export const MPLADS_RECORDS: MpladsRecord[] = [
   {
     id: 'mpl-03', workName: 'Purchase of garbage collection vehicle for Ward 3 market zone',
     ward: 'Ward 3', category: 'Sanitation', amountLakh: 6,
-    sanctionDate: '2024-11-02', status: 'Completed',
+    sanctionDate: '2024-11-02', completionDate: '2025-02-20', status: 'Completed',
     implementingAgency: 'Municipal Sanitation Department',
   },
   {
     id: 'mpl-04', workName: 'Community hall construction, Ward 6',
     ward: 'Ward 6', category: 'Other', amountLakh: 9,
-    sanctionDate: '2024-08-15', status: 'Completed',
+    sanctionDate: '2024-08-15', completionDate: '2025-01-10', status: 'Completed',
     implementingAgency: 'Municipal Corporation',
   },
   {

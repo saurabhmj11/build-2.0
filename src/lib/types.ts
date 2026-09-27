@@ -51,6 +51,8 @@ export interface MpladsRecord {
   category: Category;
   amountLakh: number;
   sanctionDate: string; // ISO date
+  /** for works recorded as Completed — the official completion claim */
+  completionDate?: string;
   status: MpladsStatus;
   implementingAgency: string;
 }
@@ -73,9 +75,35 @@ export interface MpladsMatch {
   matchedAt: string;
 }
 
+/** Module 4a — anti-manipulation signals per issue. */
+export interface VerificationFlags {
+  distinctSubmitters: number;
+  /** submitters who filed more than once inside this cluster (de-weighted) */
+  duplicateSubmitters: { name: string; times: number }[];
+  /** largest group of near-identical, templated complaints across DIFFERENT submitters */
+  templatedGroupSize: number;
+  templatedGroupSubmitters: string[];
+  coordinationSuspected: boolean;
+}
+
+export interface VerificationSummary {
+  issuesChecked: number;
+  verifiedGenuine: number;
+  coordinationFlagged: number;
+  duplicateDeWeighted: number;
+  disputedCompletions: number;
+}
+
 export interface IssueView extends Issue {
   count: number;
-  priority: number;
+  /** Module 4a: distinct citizens — the number the ranking actually uses */
+  distinctCount: number;
+  priority: number; // distinctSubmitters × urgency (verified)
+  rawPriority: number; // count × urgency (what volume alone would have scored)
+  verification: VerificationFlags;
+  /** Module 4b: official record says Completed, but ground reports continue */
+  disputed: boolean;
+  disputeReason: string | null;
   mplads: MpladsRecord | null;
   recentCount: number; // complaints in the "last hour" (demo window)
   sampleComplaints: Complaint[];
@@ -110,6 +138,7 @@ export interface DashboardState {
   complaints: Complaint[];
   issues: IssueView[];
   fundSummary: FundSummary;
+  verificationSummary: VerificationSummary;
   livePoolRemaining: number;
   totalComplaints: number;
   aiClassifiedCount: number;

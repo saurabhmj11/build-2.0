@@ -6,6 +6,8 @@ import {
   IssueView,
   MpladsRecord,
   Urgency,
+  VerificationFlags,
+  VerificationSummary,
 } from './types';
 import {
   LIVE_POOL,
@@ -110,6 +112,132 @@ export function matchMplads(issue: Issue, records: MpladsRecord[]): MpladsRecord
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Module 4a — anti-manipulation verification (deterministic, explainable)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TEMPLATED_SIMILARITY_THRESHOLD = 0.7;
+const TEMPLATED_WINDOW_MS = 60 * 60_000; // "short time window" = 1 hour
+
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function jaccardSimilarity(a: string, b: string): number {
+  const ta = new Set(normalizeForCompare(a).split(' ').filter(Boolean));
+  const tb = new Set(normalizeForCompare(b).split(' ').filter(Boolean));
+  if (!ta.size || !tb.size) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter++;
+  return inter / (ta.size + tb.size - inter);
+}
+
+function computeVerification(complaints: Complaint[]): VerificationFlags {
+  // Distinct submitters (normalized) + duplicate filers
+  const byName = new Map<string, { display: string; times: number }>();
+  for (const c of complaints) {
+    const key = c.submittedBy.trim().toLowerCase();
+    const e = byName.get(key);
+    if (e) e.times += 1;
+    else byName.set(key, { display: c.submittedBy, times: 1 });
+  }
+  const distinctSubmitters = byName.size;
+  const duplicateSubmitters = [...byName.values()]
+    .filter((e) => e.times > 1)
+    .map((e) => ({ name: e.display, times: e.times }))
+    .sort((a, b) => b.times - a.times);
+
+  // Templated-phrase groups: union-find over near-identical complaints from
+  // DIFFERENT submitters inside a short window. (Same-person repeats are
+  // handled by the distinct-submitter de-weight, not by this check.)
+  const n = complaints.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number =>
+    parent[i] === i ? i : (parent[i] = find(parent[i]));
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = complaints[i];
+      const b = complaints[j];
+      if (
+        a.submittedBy.trim().toLowerCase() === b.submittedBy.trim().toLowerCase()
+      ) {
+        continue; // same person — duplicate path, not coordination
+      }
+      const gap = Math.abs(+new Date(a.createdAt) - +new Date(b.createdAt));
+      if (gap > TEMPLATED_WINDOW_MS) continue;
+      if (
+        jaccardSimilarity(a.textOriginal, b.textOriginal) >=
+        TEMPLATED_SIMILARITY_THRESHOLD
+      ) {
+        union(i, j);
+      }
+    }
+  }
+  const groups = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    const r = find(i);
+    const g = groups.get(r) ?? [];
+    g.push(i);
+    groups.set(r, g);
+  }
+  let templatedGroupIdx: number[] = [];
+  for (const g of groups.values()) {
+    const submitters = new Set(
+      g.map((i) => complaints[i].submittedBy.trim().toLowerCase()),
+    );
+    if (g.length >= 3 && submitters.size >= 2 && g.length > templatedGroupIdx.length) {
+      templatedGroupIdx = g;
+    }
+  }
+  const templatedGroupSubmitters = [...new Set(templatedGroupIdx.map((i) => complaints[i].submittedBy))];
+  const templatedGroupSize = templatedGroupIdx.length;
+  const coordinationSuspected = templatedGroupSize >= 3 && templatedGroupSubmitters.length >= 2;
+
+  return {
+    distinctSubmitters,
+    duplicateSubmitters,
+    templatedGroupSize,
+    templatedGroupSubmitters,
+    coordinationSuspected,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module 4b — ground-truth dispute flag on official completion records
+// ─────────────────────────────────────────────────────────────────────────────
+
+function computeDispute(
+  complaints: Complaint[],
+  mplads: MpladsRecord | null,
+): { disputed: boolean; disputeReason: string | null } {
+  if (!mplads || mplads.status !== 'Completed' || !mplads.completionDate) {
+    return { disputed: false, disputeReason: null };
+  }
+  const completedAt = new Date(mplads.completionDate);
+  const after = complaints.filter((c) => new Date(c.createdAt) > completedAt);
+  if (complaints.length >= 2 && after.length === complaints.length) {
+    const dateStr = new Date(mplads.completionDate).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    return {
+      disputed: true,
+      disputeReason: `Official record marks this work completed on ${dateStr} (₹${mplads.amountLakh}L sanctioned), but ${complaints.length} citizen complaints about the same problem post-date the recorded completion. Objective mismatch between two data sources: official record vs ground reports — physical verification recommended.`,
+    };
+  }
+  return { disputed: false, disputeReason: null };
+}
+
 function computeFundSummary(issues: IssueView[], records: MpladsRecord[]): FundSummary {
   const sanctionedLakh = records.reduce((s, r) => s + r.amountLakh, 0);
   const matched = issues.filter((i) => i.mplads);
@@ -144,12 +272,20 @@ export function getDashboardState(): DashboardState {
     const sorted = [...complaints].sort(
       (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
     );
+    const verification = computeVerification(complaints);
+    const mplads = matchMplads(issue, MPLADS_RECORDS);
+    const { disputed, disputeReason } = computeDispute(complaints, mplads);
     return {
       ...issue,
       urgency,
       count,
-      priority: count * urgency,
-      mplads: matchMplads(issue, MPLADS_RECORDS),
+      distinctCount: verification.distinctSubmitters,
+      priority: verification.distinctSubmitters * urgency, // verified ranking
+      rawPriority: count * urgency, // what raw volume would have scored
+      verification,
+      disputed,
+      disputeReason,
+      mplads,
       recentCount,
       sampleComplaints: sorted.slice(0, 3),
     };
@@ -164,10 +300,27 @@ export function getDashboardState(): DashboardState {
     (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
   );
 
+  const verificationSummary: VerificationSummary = {
+    issuesChecked: issueViews.length,
+    verifiedGenuine: issueViews.filter(
+      (i) =>
+        !i.verification.coordinationSuspected &&
+        i.verification.duplicateSubmitters.length === 0 &&
+        !i.disputed,
+    ).length,
+    coordinationFlagged: issueViews.filter((i) => i.verification.coordinationSuspected)
+      .length,
+    duplicateDeWeighted: issueViews.filter(
+      (i) => i.verification.duplicateSubmitters.length > 0,
+    ).length,
+    disputedCompletions: issueViews.filter((i) => i.disputed).length,
+  };
+
   return {
     complaints: complaintsDesc,
     issues: issueViews,
     fundSummary: computeFundSummary(issueViews, MPLADS_RECORDS),
+    verificationSummary,
     livePoolRemaining: LIVE_POOL.length - store.livePoolIndex,
     totalComplaints: store.complaints.length,
     aiClassifiedCount: store.aiClassifiedCount,

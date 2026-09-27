@@ -251,15 +251,18 @@ Return ONLY valid JSON:
   },
   "rti_application": "<formal RTI application text under section 6(1) of the RTI Act 2005, addressed to the PIO of the concerned department, demanding fund release/dispatch/physical progress/completion status of the specific sanctioned work. Include subject line and numbered information points. If no sanctioned work exists, return empty string.>"
 }
-Guidelines: The RTI application is REQUIRED when a sanctioned MPLADS work exists with status Delayed, Ongoing, or Sanctioned–not started. Keep all text professional, factual, India-appropriate (use ₹ and lakh).`;
+Guidelines: The RTI application is REQUIRED when a sanctioned MPLADS work exists with status Delayed, Ongoing, or Sanctioned–not started (or when the VERIFICATION block marks the completion DISPUTED). If a VERIFICATION block is provided, calibrate the report with it: coordination flags → cautious tone on volume; disputed completion → objective-mismatch framing (never accuse fraud) and the RTI must demand geotagged completion photographs, the utilisation certificate, and any third-party inspection report. Keep all text professional, factual, India-appropriate (use ₹ and lakh).`;
 
-    const user = `ISSUE: "${issue.title}" | Category: ${issue.category} | Ward: ${issue.ward} | Location: ${issue.location} | Complaints: ${complaints.length} | Peak urgency: ${issue.urgency}/5
+    const user = `ISSUE: "${issue.title}" | Category: ${issue.category} | Ward: ${issue.ward} | Location: ${issue.location} | Complaints: ${complaints.length} (distinct citizens: ${issue.verification.distinctSubmitters}) | Peak urgency: ${issue.urgency}/5
 
 CITIZEN COMPLAINTS (translated to English):
 ${complaintBlock}
 
 MPLADS CONTEXT:
 ${mpladsBlock}
+
+VERIFICATION LAYER (two-sided):
+${verificationContextBlock(issue)}
 
 Department to address: ${department}`;
 
@@ -280,7 +283,7 @@ Department to address: ${department}`;
 
     const rti = String(parsed.rti_application ?? '');
     const rtiApplicable =
-      Boolean(mplads) && mplads!.status !== 'Completed';
+      (Boolean(mplads) && mplads!.status !== 'Completed') || issue.disputed;
 
     return {
       issueId: issue.id,
@@ -297,7 +300,7 @@ Department to address: ${department}`;
           : '',
       sanctionedLakh: mplads?.amountLakh ?? null,
       shortfallLakh:
-        mplads && Number.isFinite(estimate) && mplads.status !== 'Completed'
+        mplads && Number.isFinite(estimate) && (mplads.status !== 'Completed' || issue.disputed)
           ? Math.max(0, Number((estimate - mplads.amountLakh).toFixed(1)))
           : null,
       rtiApplication: rtiApplicable ? rti : '',
@@ -315,12 +318,40 @@ function mpladasContextBlock(mplads: MpladsRecord | null): string {
   if (!mplads) {
     return 'NO sanctioned MPLADS work found for this issue — treat as a genuinely new, unfunded problem. The RTI section must be an empty string.';
   }
+  const completion = mplads.completionDate
+    ? `\n- Officially recorded completion date: ${mplads.completionDate}`
+    : '';
   return `A sanctioned MPLADS work MATCHES this issue:
 - Work: ${mplads.workName}
-- Sanctioned amount: ₹${mplads.amountLakh} lakh on ${mplads.sanctionDate}
+- Sanctioned amount: ₹${mplads.amountLakh} lakh on ${mplads.sanctionDate}${completion}
 - Status: ${mplads.status}
 - Implementing agency: ${mplads.implementingAgency}
 Frame accordingly: this is NOT a fresh budget request — it is ${mplads.status === 'Delayed' ? 'a delayed sanctioned work needing follow-up' : mplads.status === 'Completed' ? 'a completed work that has NOT solved the problem — needs escalation and audit' : 'an ongoing sanctioned work needing progress verification'}.`;
+}
+
+function verificationContextBlock(issue: IssueView): string {
+  const v = issue.verification;
+  const lines: string[] = [
+    `- Distinct citizens: ${v.distinctSubmitters} of ${issue.count} total reports (priority ranking uses DISTINCT citizens — one citizen, one vote)`,
+  ];
+  if (v.duplicateSubmitters.length > 0) {
+    lines.push(
+      `- Duplicate submissions (de-weighted): ${v.duplicateSubmitters
+        .map((d) => `${d.name} ×${d.times}`)
+        .join(', ')}`,
+    );
+  }
+  if (v.coordinationSuspected) {
+    lines.push(
+      `- POSSIBLE COORDINATED INPUT: ${v.templatedGroupSize} of ${issue.count} complaints share near-identical templated wording from different submitters (${v.templatedGroupSubmitters.join(', ')}) within a short window. Treat the reported volume with caution — the action plan should include verifying submitter authenticity before treating this as mass demand.`,
+    );
+  }
+  if (issue.disputed) {
+    lines.push(
+      `- DISPUTED COMPLETION: ${issue.disputeReason} Frame this strictly as an objective mismatch between two data sources (official record vs citizen ground reports) — NEVER as an accusation of fraud; the MP's office decides what to do. The action plan MUST include physical inspection/audit. The RTI application MUST additionally demand: geotagged completion photographs, the utilisation certificate, and any third-party inspection report.`,
+    );
+  }
+  return lines.join('\n');
 }
 
 function fallbackReport(
@@ -330,25 +361,45 @@ function fallbackReport(
 ): Report {
   const department = DEPARTMENT_BY_CATEGORY[issue.category];
   const estimate = fallbackEstimate(issue);
-  const rtiApplicable = Boolean(mplads) && mplads!.status !== 'Completed';
+  const rtiApplicable =
+    (Boolean(mplads) && mplads!.status !== 'Completed') || issue.disputed;
+  const v = issue.verification;
+  const distinctNote =
+    v.distinctSubmitters < issue.count
+      ? `${v.distinctSubmitters} distinct citizens have reported this (of ${complaints.length} total reports; duplicates de-weighted).`
+      : `${complaints.length} distinct citizens have reported this.`;
+  const coordinationNote = v.coordinationSuspected
+    ? ` Note: ${v.templatedGroupSize} complaints share near-identical templated wording across different submitters — possible coordinated input; volume treated with caution.`
+    : '';
+  const disputeNote = issue.disputed
+    ? ` DISPUTED COMPLETION: ${issue.disputeReason}`
+    : '';
   return {
     issueId: issue.id,
     department,
-    headline: `${issue.title} — ${issue.count} citizens affected in ${issue.ward}`,
-    executiveSummary: `${complaints.length} citizens have reported "${issue.title.toLowerCase()}" in ${issue.ward}. The issue is rated urgency ${issue.urgency}/5 and is being tracked as a priority cluster (priority score ${issue.priority}). ${mplads ? `A sanctioned MPLADS work (₹${mplads.amountLakh} lakh, ${mplads.status.toLowerCase()}) already exists against this issue and must be verified on the ground.` : 'No sanctioned MPLADS work is on record for this issue; it requires a fresh budget line.'}`,
-    actionPlan: [
-      `Direct ${department} to conduct a site inspection at ${issue.location} within 48 hours and submit a status note.`,
-      mplads
-        ? `Pull the fund-release and utilisation certificate for "${mplads.workName}" (sanctioned ₹${mplads.amountLakh} lakh, ${mplads.sanctionDate}) from ${mplads.implementingAgency}.`
-        : `Request ${department} to prepare a cost estimate and work order proposal for this financial year.`,
-      `Call the complainants' representative (${complaints[0]?.submittedBy ?? 'lead complainant'}) with an action taken report within 7 days.`,
-    ],
+    headline: `${issue.title} — ${v.distinctSubmitters} citizens affected in ${issue.ward}`,
+    executiveSummary: `${distinctNote}${coordinationNote}${disputeNote} The issue is rated urgency ${issue.urgency}/5 (verified priority score ${issue.priority}). ${mplads ? `A sanctioned MPLADS work (₹${mplads.amountLakh} lakh, ${mplads.status.toLowerCase()}) already exists against this issue${issue.disputed ? ' and its completion is disputed by ground reports' : ' and must be verified on the ground'}.` : 'No sanctioned MPLADS work is on record for this issue; it requires a fresh budget line.'}`,
+    actionPlan: issue.disputed
+      ? [
+          `Order a joint physical inspection of "${mplads!.workName}" (recorded completed ${mplads!.completionDate}) with ${mplads!.implementingAgency} — the office decides next steps after verifying the mismatch.`,
+          `Pull the geotagged completion photographs, utilisation certificate and any third-party inspection report for the ₹${mplads!.amountLakh} lakh work from ${mplads!.implementingAgency}.`,
+          `Call the complainants' representative (${complaints[0]?.submittedBy ?? 'lead complainant'}) with findings and an action taken report within 7 days.`,
+        ]
+      : [
+          `Direct ${department} to conduct a site inspection at ${issue.location} within 48 hours and submit a status note.`,
+          mplads
+            ? `Pull the fund-release and utilisation certificate for "${mplads.workName}" (sanctioned ₹${mplads.amountLakh} lakh, ${mplads.sanctionDate}) from ${mplads.implementingAgency}.`
+            : `Request ${department} to prepare a cost estimate and work order proposal for this financial year.`,
+          v.coordinationSuspected
+            ? `Verify submitter authenticity (phone numbers / OTP logs at intake) before treating the reported volume as mass demand; contact ${v.templatedGroupSubmitters.join(' and ')} directly.`
+            : `Call the complainants' representative (${complaints[0]?.submittedBy ?? 'lead complainant'}) with an action taken report within 7 days.`,
+        ],
     budgetEstimateLakh: estimate,
     budgetReasoning:
       'Rule-of-thumb estimate based on problem type and ward scale; verify with department estimate.',
     sanctionedLakh: mplads?.amountLakh ?? null,
     shortfallLakh:
-      mplads && mplads.status !== 'Completed'
+      mplads && (mplads.status !== 'Completed' || issue.disputed)
         ? Math.max(0, Number((estimate - mplads.amountLakh).toFixed(1)))
         : null,
     rtiApplication: rtiApplicable ? fallbackRti(issue, mplads!) : '',
@@ -374,6 +425,24 @@ function fallbackEstimate(issue: IssueView): number {
 }
 
 function fallbackRti(issue: IssueView, mplads: MpladsRecord): string {
+  const items = [
+    '1. The date-wise details of funds released against this sanction, including the first and latest instalments.',
+    '2. Copies of work orders issued, along with the name of the contractor or executing agency.',
+    '3. The physical progress reports and inspection notes filed for this work to date.',
+    '4. The utilisation certificate submitted for the funds released so far.',
+    '5. The revised completion date of the work and reasons for the delay.',
+    `6. Action taken by the department on citizen complaints regarding this work (ref: ${issue.count} complaints, ${issue.ward}).`,
+  ];
+  if (issue.disputed) {
+    items.push(
+      '7. Copies of the geotagged completion photographs (with coordinates and timestamps) submitted as proof of completion.',
+      '8. The basis on which the work was marked complete — including any third-party inspection or audit report relied upon.',
+      '9. The name and designation of the officer who certified physical completion of this work.',
+    );
+  }
+  const completionLine = issue.disputed
+    ? `, recorded as completed on ${mplads.completionDate} — a completion status disputed by continuing citizen complaints`
+    : `, currently shown as "${mplads.status}"`;
   return `Subject: Application under Section 6(1) of the Right to Information Act, 2005 — Status of MPLADS work "${mplads.workName}"
 
 To,
@@ -382,14 +451,9 @@ ${mplads.implementingAgency}
 
 Respected Sir/Madam,
 
-I request the following information regarding the MPLADS work "${mplads.workName}" (ward: ${mplads.ward}), sanctioned for ₹${mplads.amountLakh} lakh on ${mplads.sanctionDate}, currently shown as "${mplads.status}":
+I request the following information regarding the MPLADS work "${mplads.workName}" (ward: ${mplads.ward}), sanctioned for ₹${mplads.amountLakh} lakh on ${mplads.sanctionDate}${completionLine}:
 
-1. The date-wise details of funds released against this sanction, including the first and latest instalments.
-2. Copies of work orders issued, along with the name of the contractor or executing agency.
-3. The physical progress reports and inspection notes filed for this work to date.
-4. The utilisation certificate submitted for the funds released so far.
-5. The revised completion date of the work and reasons for the delay.
-6. Action taken by the department on citizen complaints regarding this work (ref: ${issue.count} complaints, ${issue.ward}).
+${items.join('\n')}
 
 I request the information within 30 days as mandated under the Act.
 

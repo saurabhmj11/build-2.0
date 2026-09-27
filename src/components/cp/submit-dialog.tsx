@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Camera, Loader2, Mic, Send, Sparkles } from 'lucide-react';
+import { Camera, Loader2, Mic, Phone, Send, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -112,6 +112,12 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
             This runs the live AI pipeline: translation → category → urgency → ward extraction →
             duplicate matching. Watch it land in the feed and cluster instantly.
           </DialogDescription>
+          <p className="flex items-start gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-500">
+            <Phone className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+            Production intake design: phone OTP verification + per-number rate
+            limiting — keeps bots and repeat submitters out of the ranking
+            (documented requirement; simulated in this demo).
+          </p>
         </DialogHeader>
 
         <div className="space-y-3">

@@ -4,9 +4,12 @@ import { useState } from 'react';
 import {
   AlertTriangle,
   ChevronDown,
+  Copy,
   FileText,
+  FileWarning,
   MapPin,
   ShieldAlert,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +25,6 @@ import {
   SOURCE_ICON,
   timeAgo,
   urgencyStyle,
-  MPLADS_STATUS_STYLE,
 } from '@/lib/client-format';
 
 interface IssueCardProps {
@@ -33,13 +35,19 @@ interface IssueCardProps {
   onGenerateReport: (issue: IssueView) => void;
 }
 
-function CountBadge({ count }: { count: number }) {
-  // key={count} on the consumer remounts this badge whenever the cluster grows,
-  // replaying the one-shot pop animation — the "N citizens reported this" moment.
+function CountBadge({ count, distinct }: { count: number; distinct: number }) {
+  // key remount replays the pop animation when the cluster genuinely grows
+  const genuine = distinct;
   return (
-    <span className="cp-count-pop inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+    <span
+      key={genuine}
+      className="cp-count-pop inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-bold text-white shadow-sm"
+    >
       <Users className="h-3.5 w-3.5" aria-hidden />
-      {count} {count === 1 ? 'citizen' : 'citizens'} reported
+      {genuine} {genuine === 1 ? 'distinct citizen' : 'distinct citizens'} reported
+      {count > distinct && (
+        <span className="font-semibold opacity-80">· {count} reports</span>
+      )}
     </span>
   );
 }
@@ -53,10 +61,12 @@ export function IssueCard({
 }: IssueCardProps) {
   const [open, setOpen] = useState(false);
   const urg = urgencyStyle(issue.urgency);
-
-  const pct = maxPriority > 0 ? Math.round((issue.priority / maxPriority) * 100) : 0;
+  const v = issue.verification;
   const mpl = issue.mplads;
   const isTop = rank === 1;
+  const deWeighted = issue.rawPriority > issue.priority;
+
+  const pct = maxPriority > 0 ? Math.round((issue.priority / maxPriority) * 100) : 0;
 
   return (
     <article
@@ -99,7 +109,7 @@ export function IssueCard({
           </p>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <CountBadge key={issue.count} count={issue.count} />
+            <CountBadge count={issue.count} distinct={issue.distinctCount} />
             {issue.recentCount > 0 && (
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
                 +{issue.recentCount} in last hour
@@ -120,14 +130,14 @@ export function IssueCard({
           </div>
 
           {/* Priority bar */}
-          <div className="mt-2.5 flex items-center gap-2">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
             <div
-              className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"
+              className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-slate-100"
               role="progressbar"
               aria-valuenow={issue.priority}
               aria-valuemin={0}
               aria-valuemax={maxPriority}
-              aria-label="Priority score relative to top issue"
+              aria-label="Verified priority score relative to top issue"
             >
               <div
                 className={`h-full rounded-full ${isTop ? 'bg-emerald-600' : 'bg-slate-400'}`}
@@ -135,19 +145,46 @@ export function IssueCard({
               />
             </div>
             <span className="shrink-0 text-[10px] font-medium text-slate-400">
-              {issue.count} × urgency {issue.urgency}
+              {issue.distinctCount} distinct × urgency {issue.urgency}
             </span>
+            {deWeighted && (
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+                title="Raw volume would have scored this higher — the verification layer de-weighted it"
+              >
+                <ShieldAlert className="h-3 w-3" aria-hidden />
+                raw {issue.rawPriority} → verified {issue.priority}
+              </span>
+            )}
           </div>
 
-          {/* MPLADS cross-reference */}
-          {mpl ? (
+          {/* Module 4b — disputed official completion record */}
+          {issue.disputed && mpl ? (
+            <div className="mt-3 rounded-lg border-2 border-red-300 bg-red-50 p-2.5 text-xs leading-relaxed">
+              <p className="flex items-start gap-1.5 font-bold text-red-800">
+                <FileWarning className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                DISPUTED COMPLETION — work recorded completed, ground reports
+                continue
+              </p>
+              <p className="mt-1 pl-5.5 font-semibold text-slate-800">
+                Already sanctioned ₹{mpl.amountLakh}L on {mpl.sanctionDate},
+                officially completed {mpl.completionDate} — yet {issue.count}{' '}
+                complaints about the same problem post-date the completion.
+              </p>
+              <p className="mt-0.5 pl-5.5 text-slate-600">
+                “{mpl.workName}” · {mpl.implementingAgency}
+              </p>
+              <p className="mt-0.5 pl-5.5 font-medium text-red-700">
+                → Objective mismatch between official record and ground reports
+                — physical verification recommended. Not hidden as “resolved”.
+              </p>
+            </div>
+          ) : mpl ? (
             <div
               className={`mt-3 rounded-lg border p-2.5 text-xs leading-relaxed ${
                 mpl.status === 'Delayed'
                   ? 'border-red-200 bg-red-50'
-                  : mpl.status === 'Completed'
-                    ? 'border-amber-200 bg-amber-50'
-                    : 'border-amber-200 bg-amber-50/70'
+                  : 'border-amber-200 bg-amber-50/70'
               }`}
             >
               <p className="flex items-start gap-1.5 font-semibold text-slate-800">
@@ -157,8 +194,8 @@ export function IssueCard({
                   }`}
                   aria-hidden
                 />
-                Already sanctioned ₹{mpl.amountLakh}L on {mpl.sanctionDate} — status:{' '}
-                <span className="whitespace-nowrap">{mpl.status}</span>
+                Already sanctioned ₹{mpl.amountLakh}L on {mpl.sanctionDate} —
+                status: <span className="whitespace-nowrap">{mpl.status}</span>
               </p>
               <p className="mt-0.5 pl-5 text-slate-600">
                 “{mpl.workName}” · {mpl.implementingAgency}
@@ -167,14 +204,49 @@ export function IssueCard({
                 {mpl.status === 'Delayed'
                   ? '→ Unfulfilled sanctioned work: needs follow-up, not new budget.'
                   : mpl.status === 'Completed'
-                    ? '→ Work marked completed but complaints continue: escalate for audit.'
+                    ? '→ Work marked completed; monitoring complaint trend for dispute flags.'
                     : '→ Ongoing sanctioned work: verify progress on the ground.'}
               </p>
             </div>
           ) : (
             <p className="mt-3 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium text-slate-500">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
               No sanctioned MPLADS work on record — treat as a fresh, unfunded issue.
+            </p>
+          )}
+
+          {/* Module 4a — coordinated-campaign flag */}
+          {v.coordinationSuspected && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs leading-relaxed">
+              <p className="flex items-start gap-1.5 font-bold text-amber-900">
+                <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                Possible coordinated campaign — {v.templatedGroupSize} of{' '}
+                {issue.count} complaints share near-identical templated wording
+                across different submitters ({v.templatedGroupSubmitters.join(', ')})
+                within a short window.
+              </p>
+              <p className="mt-0.5 pl-5 text-amber-800">
+                → Different check from duplicate clustering: these are{' '}
+                <span className="font-semibold">suspiciously identical</span>{' '}
+                texts, not different people describing the same problem. Ranking
+                uses {issue.distinctCount} distinct citizens only.
+              </p>
+            </div>
+          )}
+
+          {/* Module 4a — repeat submitters note */}
+          {v.duplicateSubmitters.length > 0 && (
+            <p className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-600">
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+              Repeat submitters (de-weighted, one citizen one vote):
+              {v.duplicateSubmitters.map((d) => (
+                <span
+                  key={d.name}
+                  className="rounded-full bg-white px-1.5 py-0.5 font-semibold text-slate-700 shadow-sm"
+                >
+                  {d.name} ×{d.times}
+                </span>
+              ))}
             </p>
           )}
         </div>

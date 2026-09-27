@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownUp, Inbox, ListFilter } from 'lucide-react';
 import { Header } from '@/components/cp/header';
 import { FundStrip } from '@/components/cp/fund-strip';
+import { VerificationStrip } from '@/components/cp/verification-strip';
 import { LiveFeed } from '@/components/cp/live-feed';
 import { IssueCard } from '@/components/cp/issue-card';
 import { ReportDialog } from '@/components/cp/report-dialog';
@@ -119,7 +120,7 @@ export default function Home() {
       const data = await res.json();
       if (data.ok) {
         setState(data.state as DashboardState);
-        toast({ title: 'Demo reset', description: 'Back to the seeded intake of 19 complaints.' });
+        toast({ title: 'Demo reset', description: 'Back to the seeded intake of 24 complaints.' });
       }
     } catch {
       toast({ title: 'Reset failed' });
@@ -184,6 +185,7 @@ export default function Home() {
               totalComplaints={state.totalComplaints}
               totalIssues={state.issues.length}
             />
+            <VerificationStrip summary={state.verificationSummary} />
 
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(330px,390px)_1fr]">
               <LiveFeed complaints={state.complaints.slice(0, 40)} processing={processing} />
@@ -196,7 +198,7 @@ export default function Home() {
                   </h2>
                   <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
                     <ArrowDownUp className="h-3 w-3" aria-hidden />
-                    sorted by complaints × urgency
+                    sorted by distinct citizens × urgency — one citizen, one vote
                     {state.livePoolRemaining > 0 && (
                       <span className="ml-1 rounded-full bg-white px-2 py-0.5 font-semibold text-slate-500 shadow-sm">
                         {state.livePoolRemaining} in sim queue
@@ -218,9 +220,11 @@ export default function Home() {
 
                 <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-400">
                   <Inbox className="h-3 w-3 shrink-0" aria-hidden />
-                  {state.totalComplaints} raw complaints collapsed into {state.issues.length}{' '}
-                  actionable issues — {state.clusterSavings} duplicates merged away by the AI
-                  cluster engine.
+                  {state.totalComplaints} raw complaints collapsed into{' '}
+                  {state.issues.length} actionable issues — {state.clusterSavings}{' '}
+                  duplicates merged by the AI cluster engine · every issue
+                  verified two-sided: citizen input de-weighted for manipulation,
+                  official records checked against ground reports.
                 </p>
               </section>
             </div>
@@ -231,8 +235,9 @@ export default function Home() {
       <footer className="mt-auto border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-slate-400">
           <span>
-            CitizenPulse — it&apos;s not a complaint tracker. It&apos;s a closed-loop truth
-            engine.
+            CitizenPulse — questions both directions: de-weights manipulated
+            citizen input, disputes unfulfilled official records. Not a
+            complaint tracker — a closed-loop truth engine.
           </span>
           <span>Track 1: AI for Digital Public Infrastructure &amp; Governance · MVP demo</span>
         </div>
