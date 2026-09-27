@@ -43,6 +43,8 @@ interface SeedComplaintSpec {
   submitterProfile?: SubmitterProfile;
   /** 'declared' at intake or 'inferred' from the text itself */
   profileSource?: ProfileSource;
+  /** Module 7 — AI vision analysis of an attached photo (historical archive) */
+  photoAnalysis?: string;
 }
 
 export interface LivePoolItem {
@@ -164,6 +166,8 @@ const NAGPUR_COMPLAINTS: SeedComplaintSpec[] = [
     summaryEn: 'Deep potholes on Kamptee Road; two-wheelers skidding every evening',
     category: 'Roads', urgency: 5, ward: 'Ward 12', location: 'Kamptee Road service lane, near bus stop',
     source: 'App', submittedBy: 'Ankit Meshram', minutesAgo: 190,
+    // Module 7 — historical photo evidence on the flagship cluster
+    photoAnalysis: 'Deep water-filled pothole spanning half the service lane; broken tarmac edges and loose gravel visible; scooter tracks swerving around it.',
   },
   {
     id: 'nc-004', issueId: 'ngp-road-12',
@@ -240,6 +244,8 @@ const NAGPUR_COMPLAINTS: SeedComplaintSpec[] = [
     summaryEn: 'Koradi "repaired" road breaking apart again; two bike falls',
     category: 'Roads', urgency: 4, ward: 'Ward 8', location: 'Koradi internal road, temple stretch',
     source: 'WhatsApp', submittedBy: 'Vinod Chavhan', minutesAgo: 36000, // ~25 days ago
+    // Module 7 — geotagged photo disputing the recorded completion
+    photoAnalysis: 'Freshly crumbled patch of a recently resurfaced road; exposed aggregate and a developing pothole at the patch edge — consistent with poor workmanship, not old wear.',
   },
   {
     id: 'nc-012', issueId: 'ngp-road-8',
@@ -570,6 +576,8 @@ const MUMBAI_COMPLAINTS: SeedComplaintSpec[] = [
     summaryEn: 'Rainwater logging at SV Road underpass; auto engines submerged',
     category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
     source: 'WhatsApp', submittedBy: 'Vaishali Mhatre', minutesAgo: 31680, // ~22 days after 28 Jun completion
+    // Module 7 — photo evidence against the recorded desilting completion
+    photoAnalysis: 'Flooded road underpass with murky rainwater covering most of the carriageway; a stalled auto-rickshaw half-submerged at the edge; no visible functioning drain grate.',
   },
   {
     id: 'mc-002', issueId: 'mum-drain-21',

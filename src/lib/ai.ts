@@ -58,6 +58,65 @@ async function chat(messages: { role: 'system' | 'user'; content: string }[]): P
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Module 7 — photo evidence: AI vision analysis of citizen-submitted photos
+// (z-ai-web-dev-sdk vision — backend only). The analysis becomes structured
+// evidence the classifier consumes: category confirmation + severity signals
+// that text alone may not carry (“large water-filled pothole” → urgency up).
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface PhotoAnalysis {
+  /** what the photo shows, factual and specific */
+  description: string;
+  /** one of CATEGORIES or null if the photo is not civic-infrastructure */
+  suggestedCategory: Category | null;
+  /** concrete severity signals visible in the frame */
+  severityEvidence: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+const LLM_TIMEOUT_PHOTO_MS = 60_000;
+
+export async function analyzePhoto(dataUrl: string): Promise<PhotoAnalysis> {
+  const zai = await ZAI.create();
+  const system = `You are the photo evidence analyzer of an Indian MP constituency office's complaint intake. Citizens attach photos of civic problems (potholes, garbage, waterlogging, broken streetlights, damaged infrastructure…).
+Analyze the photo and return ONLY valid JSON, no prose:
+{"description":"one or two factual sentences describing what is visible — the infrastructure problem, its apparent size/depth/extent, and any visible danger or impact","suggested_category":"one of [Roads, Water, Drainage, Sanitation, Electricity, Health, Education, Parks, Safety, Pollution, Other] or null if this is not a civic infrastructure photo","severity_evidence":"short phrase with concrete visual severity signals (e.g. 'deep water-filled pothole spanning half the lane', 'garbage mound blocking the footpath')","confidence":"high|medium|low"}
+Be factual — describe only what is visible. Never invent a location or ward.`;
+
+  const completion = await withTimeout(
+    zai.chat.completions.createVision({
+      messages: [
+        { role: 'system', content: system },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Analyze this citizen complaint photo.' },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      thinking: { type: 'disabled' },
+    } as Parameters<typeof zai.chat.completions.createVision>[0]),
+    LLM_TIMEOUT_PHOTO_MS,
+  );
+  const raw = completion.choices[0]?.message?.content ?? '';
+  const parsed = extractJson(raw);
+  if (!parsed) throw new Error('Could not parse photo analysis JSON');
+  const suggested = CATEGORIES.includes(parsed.suggested_category as Category)
+    ? (parsed.suggested_category as Category)
+    : null;
+  return {
+    description: String(parsed.description ?? ''),
+    suggestedCategory: suggested,
+    severityEvidence: String(parsed.severity_evidence ?? ''),
+    confidence:
+      parsed.confidence === 'high' || parsed.confidence === 'medium'
+        ? parsed.confidence
+        : 'low',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Step 1+2 (combined single call): classify a complaint AND match its cluster
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -78,6 +137,7 @@ export interface ClassifyResult {
 export async function classifyAndMatch(
   text: string,
   existingIssues: { id: string; title: string; category: Category; ward: string }[],
+  photoEvidence?: string,
 ): Promise<ClassifyResult> {
   try {
     const issuesBlock = existingIssues
@@ -100,9 +160,15 @@ JOB 1 — CLASSIFY. Return:
 JOB 2 — CLUSTER MATCH. Compare against the existing issues list. If this complaint is about the SAME underlying problem as an existing issue (same ward/area AND same category of infrastructure problem — different wording, language, or severity still counts as the same issue), set "matched_issue_id" to that id. If it is genuinely a new problem, set it to null.
 
 Return ONLY valid JSON, no prose:
-{"category":"...","urgency":N,"ward":"...","location":"...","language":"...","translationEn":"...","summary_en":"...","submitter_profile":"general","matched_issue_id":null,"match_reason":"..."}`;
+{"category":"...","urgency":N,"ward":"...","location":"...","language":"...","translationEn":"...","summary_en":"...","submitter_profile":"general","matched_issue_id":null,"match_reason":"..."}
 
-    const user = `EXISTING ISSUES:\n${issuesBlock || '(none yet)'}\n\nNEW COMPLAINT:\n"""${text}"""`;
+If an ATTACHED PHOTO EVIDENCE block is provided, treat it as reliable ground truth about the problem's physical nature: use it to confirm or correct the category, and let visible severity (depth of a pothole, spread of garbage, flooding extent) inform the urgency score.`;
+
+    const user = `EXISTING ISSUES:\n${issuesBlock || '(none yet)'}\n\nNEW COMPLAINT:\n"""${text}"""${
+      photoEvidence
+        ? `\n\nATTACHED PHOTO EVIDENCE (AI vision analysis of the citizen's photo):\n"""${photoEvidence}"""`
+        : ''
+    }`;
 
     const raw = await withTimeout(
       chat([

@@ -116,6 +116,8 @@ export interface Complaint {
   createdAt: string; // ISO
   issueId: string;
   aiClassified: boolean; // true = processed by live LLM pipeline
+  /** Module 7 — AI vision analysis of an attached photo (evidence text) */
+  photoAnalysis?: string;
   /** Module 5 — occupation profile ('general' by default) */
   submitterProfile: SubmitterProfile;
   /** declared at intake · inferred from complaint text · default (no signal) */

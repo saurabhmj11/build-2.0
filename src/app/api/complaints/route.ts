@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
       constituencyId?: string;
       /** Module 5 — self-declared occupation ('farmer' | 'general'); absent = infer from text */
       submitterProfile?: string;
+      /** Module 7 — AI vision analysis of an attached photo (evidence) */
+      photoAnalysis?: string;
     };
 
     const constituencyId = body.constituencyId ?? 'nagpur';
@@ -30,9 +32,10 @@ export async function POST(req: NextRequest) {
     }
 
     const text = (body.text ?? '').trim();
-    if (!text) {
+    const photoAnalysis = body.photoAnalysis?.trim() || undefined;
+    if (!text && !photoAnalysis) {
       return NextResponse.json(
-        { error: 'Complaint text is required.' },
+        { error: 'Describe the problem or attach a photo first.' },
         { status: 400 },
       );
     }
@@ -42,6 +45,9 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    // Photo-only intake: the vision analysis stands in as the complaint text
+    // so a citizen with a camera and no words still gets classified.
+    const effectiveText = text || (photoAnalysis ?? '');
 
     const source = ['WhatsApp', 'Phone', 'Letter', 'Walk-in', 'App', 'Voice note'].includes(
       body.source ?? '',
@@ -56,10 +62,11 @@ export async function POST(req: NextRequest) {
 
     const result = await processIncomingComplaint(
       constituencyId,
-      text,
+      effectiveText,
       source,
       (body.submittedBy ?? 'Anonymous citizen').trim() || 'Anonymous citizen',
       declaredProfile,
+      photoAnalysis,
     );
 
     return NextResponse.json({

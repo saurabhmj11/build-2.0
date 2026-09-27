@@ -9,6 +9,10 @@ import { Complaint, ProfileSource, SubmitterProfile } from './types';
  *
  * Module 5: a self-DECLARED occupation at intake overrides the text-inferred
  * profile — the citizen's own statement wins.
+ *
+ * Module 7: an attached photo's AI vision analysis rides along as evidence —
+ * the classifier treats it as ground truth for category/severity, and it is
+ * stored on the complaint so reports and dispute flags can cite it.
  */
 export async function processIncomingComplaint(
   constituencyId: string,
@@ -16,6 +20,7 @@ export async function processIncomingComplaint(
   source: Complaint['source'],
   submittedBy: string,
   declaredProfile?: SubmitterProfile,
+  photoAnalysis?: string,
 ): Promise<NewComplaintResult> {
   const state = getDashboardState(constituencyId);
   const issuesForMatch = state.issues.map((i) => ({
@@ -25,7 +30,7 @@ export async function processIncomingComplaint(
     ward: i.ward,
   }));
 
-  const result = await classifyAndMatch(text, issuesForMatch);
+  const result = await classifyAndMatch(text, issuesForMatch, photoAnalysis);
 
   const submitterProfile: SubmitterProfile = declaredProfile ?? result.submitterProfile;
   const profileSource: ProfileSource = declaredProfile
@@ -49,5 +54,6 @@ export async function processIncomingComplaint(
     matchedIssueId: result.matchedIssueId,
     submitterProfile,
     profileSource,
+    photoAnalysis,
   });
 }

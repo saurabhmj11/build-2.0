@@ -392,6 +392,12 @@ export function IssueCard({
                 <p className="mt-0.5 text-xs italic leading-snug text-gray-500">
                   {c.translationEn}
                 </p>
+                {c.photoAnalysis && (
+                  <p className="mt-1.5 rounded-md border border-teal-900/60 bg-teal-950/20 px-2 py-1.5 text-[11px] leading-snug text-teal-300">
+                    📷 <span className="font-semibold">Photo evidence (AI vision):</span>{' '}
+                    {c.photoAnalysis}
+                  </p>
+                )}
               </div>
             ))}
           </div>

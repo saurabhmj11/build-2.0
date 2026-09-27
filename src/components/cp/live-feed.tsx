@@ -55,6 +55,14 @@ function FeedItem({ complaint }: { complaint: Complaint }) {
             🌾 farmer
           </span>
         )}
+        {complaint.photoAnalysis && (
+          <span
+            className="cursor-help rounded-sm bg-teal-950/70 px-1 py-px font-bold text-teal-300 ring-1 ring-teal-800"
+            title={`AI vision analysis of the attached photo: ${complaint.photoAnalysis}`}
+          >
+            📷 photo
+          </span>
+        )}
         {complaint.aiClassified && (
           <span className="rounded-sm bg-amber-950/70 px-1 py-px font-bold text-amber-400 ring-1 ring-amber-800">
             AI

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Mic, Send, Sparkles, Square } from 'lucide-react';
+import { Camera, Loader2, Mic, Send, Sparkles, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,12 +21,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { DashboardState } from '@/lib/types';
 
@@ -111,6 +105,16 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceLang, setVoiceLang] = useState('mr-IN');
+  // Module 7 — photo evidence (AI vision analysis)
+  const [photoData, setPhotoData] = useState<string | null>(null);
+  const [photoAnalysis, setPhotoAnalysis] = useState<{
+    description: string;
+    suggestedCategory: string | null;
+    severityEvidence: string;
+    confidence: string;
+  } | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const recognitionRef = useRef<SRLike | null>(null);
   const baseTextRef = useRef('');
@@ -123,6 +127,51 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
       recognitionRef.current = null;
     };
   }, []);
+
+  // Module 7 — pick a photo, then run the AI vision analysis immediately
+  const onPhotoPick = (file: File | undefined) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({ title: 'Unsupported format', description: 'Attach a JPG, PNG or WebP photo.' });
+      return;
+    }
+    if (file.size > 4_000_000) {
+      toast({ title: 'Photo too large', description: 'Please attach an image under 4 MB.' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      setPhotoData(dataUrl);
+      setPhotoAnalysis(null);
+      setPhotoBusy(true);
+      fetch('/api/photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d.ok) throw new Error(d.error ?? 'failed');
+          setPhotoAnalysis(d.analysis);
+        })
+        .catch(() => {
+          setPhotoAnalysis(null);
+          toast({
+            title: 'Photo analysis unavailable',
+            description: 'You can still submit — the photo will be attached without AI analysis.',
+          });
+        })
+        .finally(() => setPhotoBusy(false));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearPhoto = () => {
+    setPhotoData(null);
+    setPhotoAnalysis(null);
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
 
   const toggleListen = () => {
     if (listening) {
@@ -179,10 +228,10 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
 
   const submit = async () => {
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed && !photoAnalysis) {
       toast({
         title: 'Please describe the problem first',
-        description: 'Any language works — Marathi, Hindi, English…',
+        description: 'Any language works — Marathi, Hindi, English… or just attach a photo.',
       });
       return;
     }
@@ -198,6 +247,9 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
           source: channel,
           constituencyId,
           submitterProfile: occupation === 'auto' ? undefined : occupation,
+          photoAnalysis: photoAnalysis
+            ? `${photoAnalysis.description} Visible severity: ${photoAnalysis.severityEvidence}`
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -207,11 +259,12 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
         data.state as DashboardState,
         `${c.aiClassified ? 'AI classified' : 'Classified'}: ${c.category} · urgency ${c.urgency} · ${c.ward} — ${
           data.isNewIssue ? 'new issue opened' : 'merged into existing issue'
-        }`,
+        }${photoAnalysis ? ' · 📷 photo evidence attached' : ''}`,
         data.isNewIssue,
       );
       setText('');
       setName('');
+      clearPhoto();
       onOpenChange(false);
     } catch {
       toast({ title: 'Submission failed', description: 'Please try again in a moment.' });
@@ -333,31 +386,96 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
                 Listening — speak now
               </span>
             )}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    className="h-8 gap-1.5 border-dashed border-[#374151] bg-transparent text-xs text-gray-600"
-                    aria-label="Photo upload (demo stub)"
-                  >
-                    📷 Photo
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  MVP: photo ingestion is v2 — placeholder only.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              aria-label="Attach a photo of the problem"
+              onChange={(e) => onPhotoPick(e.target.files?.[0])}
+              disabled={busy || photoBusy}
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={busy || photoBusy}
+              className="h-8 gap-1.5 border border-[#4B5563] bg-[#1F2937] px-2.5 text-xs font-semibold text-gray-200 hover:bg-[#374151]"
+            >
+              <Camera className="h-3.5 w-3.5" aria-hidden />
+              {photoData ? '📷 Photo attached' : '📷 Photo'}
+            </Button>
           </div>
           <p className="text-[10px] leading-snug text-gray-600">
             Voice runs on the browser-native Web Speech API (Chrome/Edge) — a
-            stopgap that proves the UX. Production swaps in AI4Bharat&apos;s
+            stopgap that proves the UX; production swaps in AI4Bharat&apos;s
             open-source IndicConformer ASR for all 22 scheduled languages.
+            Photos are analyzed by the vision model on our server — the analysis
+            travels with the complaint as evidence for the classifier and any
+            later dispute.
           </p>
+
+          {/* Module 7 — photo preview + AI vision analysis card */}
+          {photoData && (
+            <div className="rounded-lg border border-[#374151] bg-[#111827] p-2.5">
+              <div className="flex items-start gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photoData}
+                  alt="Attached complaint photo preview"
+                  className="h-16 w-16 shrink-0 rounded-md object-cover ring-1 ring-[#4B5563]"
+                />
+                <div className="min-w-0 flex-1">
+                  {photoBusy ? (
+                    <p className="flex items-center gap-2 text-xs font-semibold text-amber-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      AI vision analyzing the photo — damage, category, severity…
+                    </p>
+                  ) : photoAnalysis ? (
+                    <div className="space-y-1.5">
+                      <p className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        ✓ Photo analyzed
+                        {photoAnalysis.suggestedCategory && (
+                          <span className="rounded-full bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-300 ring-1 ring-emerald-800">
+                            suggests: {photoAnalysis.suggestedCategory}
+                          </span>
+                        )}
+                        <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[10px] font-semibold text-gray-300">
+                          {photoAnalysis.confidence} confidence
+                        </span>
+                      </p>
+                      <p className="text-xs leading-snug text-gray-300">
+                        {photoAnalysis.description}
+                      </p>
+                      <p className="text-[11px] italic leading-snug text-amber-400/90">
+                        Severity evidence: {photoAnalysis.severityEvidence}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      Analysis unavailable — the photo will still be attached to
+                      your complaint.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  disabled={busy}
+                  aria-label="Remove attached photo"
+                  className="shrink-0 rounded-md p-1 text-gray-500 transition-colors hover:bg-[#374151] hover:text-white"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+              {!text.trim() && photoAnalysis && !busy && (
+                <p className="mt-2 rounded-md bg-[#1F2937] px-2 py-1 text-[10px] font-medium text-gray-400">
+                  Tip: no words needed — submit with just this photo and the
+                  vision analysis stands in as your complaint.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -437,7 +555,7 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
           <Button
             size="sm"
             onClick={submit}
-            disabled={busy || !text.trim()}
+            disabled={busy || photoBusy || (!text.trim() && !photoAnalysis)}
             className="gap-1.5 bg-amber-600 font-semibold text-white hover:bg-amber-500"
           >
             {busy ? (

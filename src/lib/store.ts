@@ -56,6 +56,7 @@ function seedStore(constituencyId: string): StoreState {
     createdAt: minutesAgoISO(c.minutesAgo),
     issueId: c.issueId,
     aiClassified: false, // historical archive: pre-classified ground truth
+    photoAnalysis: c.photoAnalysis,
     submitterProfile: c.submitterProfile ?? 'general',
     profileSource: c.submitterProfile
       ? (c.profileSource ?? 'declared')
@@ -483,6 +484,8 @@ export interface RegisterComplaintInput {
   /** Module 5 — occupation profile (declared or inferred at intake) */
   submitterProfile: SubmitterProfile;
   profileSource: ProfileSource;
+  /** Module 7 — AI vision analysis of an attached photo (evidence text) */
+  photoAnalysis?: string;
 }
 
 export function registerComplaint(
@@ -540,6 +543,7 @@ export function registerComplaint(
     createdAt: now,
     issueId: issue.id,
     aiClassified: input.aiClassified,
+    photoAnalysis: input.photoAnalysis,
     submitterProfile: input.submitterProfile,
     profileSource: input.profileSource,
   };
