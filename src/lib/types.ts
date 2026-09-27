@@ -1,23 +1,27 @@
 export type Category =
   | 'Roads'
   | 'Water'
+  | 'Drainage'
   | 'Sanitation'
   | 'Electricity'
   | 'Health'
   | 'Education'
   | 'Parks'
   | 'Safety'
+  | 'Pollution'
   | 'Other';
 
 export const CATEGORIES: Category[] = [
   'Roads',
   'Water',
+  'Drainage',
   'Sanitation',
   'Electricity',
   'Health',
   'Education',
   'Parks',
   'Safety',
+  'Pollution',
   'Other',
 ];
 
@@ -106,6 +110,10 @@ export interface IssueView extends Issue {
   /** Module 4b: official record says Completed, but ground reports continue */
   disputed: boolean;
   disputeReason: string | null;
+  /** complaints filed AFTER the recorded completion date (Module 4b copy) */
+  reportsSinceCompletion: number;
+  /** Module 4a: suspected coordinated campaign → rank capped at urgency (human review) */
+  quarantined: boolean;
   mplads: MpladsRecord | null;
   recentCount: number; // complaints in the "last hour" (demo window)
   sampleComplaints: Complaint[];
@@ -145,6 +153,7 @@ export interface WardStat {
 }
 
 export interface DashboardState {
+  constituency: import('./constituencies').ConstituencyMeta;
   complaints: Complaint[];
   issues: IssueView[];
   fundSummary: FundSummary;
@@ -158,13 +167,15 @@ export interface DashboardState {
 
 export const DEPARTMENT_BY_CATEGORY: Record<Category, string> = {
   Roads: 'Public Works Department (PWD)',
-  Water: 'Public Health Engineering Dept / Jal Board',
-  Sanitation: 'Municipal Sanitation Department',
-  Electricity: 'State Electricity Board',
+  Water: 'Public Health Engineering Dept / Municipal Water Works',
+  Drainage: 'Storm Water Drains Department (Municipal Corporation)',
+  Sanitation: 'Municipal Solid Waste Management Department',
+  Electricity: 'Municipal Street Lighting / State Electricity Board',
   Health: 'District Health Department',
   Education: 'District Education Department',
   Parks: 'Horticulture & Parks Department',
   Safety: 'Municipal Safety & Traffic Cell',
+  Pollution: 'Maharashtra Pollution Control Board (MPCB)',
   Other: 'District Administration',
 };
 

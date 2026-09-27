@@ -9,13 +9,10 @@ import {
   VerificationFlags,
   VerificationSummary,
 } from './types';
+import { constituencyMeta } from './constituencies';
 import {
-  LIVE_POOL,
+  CONSTITUENCY_SEEDS,
   MPLADS_ENTITLEMENT_LAKH,
-  MPLADS_RECORDS,
-  SEED_COMPLAINTS,
-  SEED_ISSUES,
-  SUBMITTER_IDS,
 } from './seed';
 
 interface StoreState {
@@ -27,18 +24,22 @@ interface StoreState {
   aiClassifiedCount: number;
 }
 
+/** Constituency = first-class tenant key (ARCHITECTURE.md scaling path). */
 const globalForStore = globalThis as unknown as {
-  __citizenPulseStore?: StoreState;
+  __citizenPulseStores?: Record<string, StoreState>;
 };
 
 function minutesAgoISO(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
-function seedStore(): StoreState {
-  const complaints: Complaint[] = SEED_COMPLAINTS.map((c) => ({
+function seedStore(constituencyId: string): StoreState {
+  const seed = CONSTITUENCY_SEEDS[constituencyId];
+  if (!seed) throw new Error(`Unknown constituency: ${constituencyId}`);
+
+  const complaints: Complaint[] = seed.complaints.map((c) => ({
     id: c.id,
-    submitterId: SUBMITTER_IDS[c.submittedBy] ?? `PH-00000-${c.id}`,
+    submitterId: seed.submitters[c.submittedBy] ?? `PH-00000-${c.id}`,
     textOriginal: c.textOriginal,
     language: c.language,
     translationEn: c.translationEn,
@@ -54,7 +55,7 @@ function seedStore(): StoreState {
     aiClassified: false, // historical archive: pre-classified ground truth
   }));
 
-  const issues: Issue[] = SEED_ISSUES.map((iss) => {
+  const issues: Issue[] = seed.issues.map((iss) => {
     const mine = complaints.filter((c) => c.issueId === iss.id);
     const sorted = [...mine].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
     return {
@@ -75,31 +76,37 @@ function seedStore(): StoreState {
   };
 }
 
-function getStore(): StoreState {
-  if (!globalForStore.__citizenPulseStore) {
-    globalForStore.__citizenPulseStore = seedStore();
+function getStore(constituencyId: string): StoreState {
+  if (!globalForStore.__citizenPulseStores) {
+    globalForStore.__citizenPulseStores = {};
   }
-  return globalForStore.__citizenPulseStore;
+  if (!globalForStore.__citizenPulseStores[constituencyId]) {
+    globalForStore.__citizenPulseStores[constituencyId] = seedStore(constituencyId);
+  }
+  return globalForStore.__citizenPulseStores[constituencyId];
 }
 
-export function resetStore(): void {
-  globalForStore.__citizenPulseStore = seedStore();
+export function resetStore(constituencyId: string): void {
+  if (globalForStore.__citizenPulseStores) {
+    delete globalForStore.__citizenPulseStores[constituencyId];
+  }
 }
 
 /**
  * MPLADS match — deterministic & explainable: same ward + same category family.
- * Category families let e.g. 'Sanitation' complaints match 'Sanitation' works
- * while never cross-linking Water (pipeline) with Sanitation (drainage).
+ * Category families keep Water (pipeline) separate from Drainage (storm water).
  */
 const CATEGORY_FAMILY: Record<string, string[]> = {
   Roads: ['Roads'],
   Water: ['Water'],
+  Drainage: ['Drainage'],
   Sanitation: ['Sanitation'],
   Electricity: ['Electricity'],
   Health: ['Health'],
   Education: ['Education'],
   Parks: ['Parks'],
   Safety: ['Safety'],
+  Pollution: ['Pollution'],
   Other: ['Other'],
 };
 
@@ -218,13 +225,17 @@ function computeVerification(complaints: Complaint[]): VerificationFlags {
 function computeDispute(
   complaints: Complaint[],
   mplads: MpladsRecord | null,
-): { disputed: boolean; disputeReason: string | null } {
+): {
+  disputed: boolean;
+  disputeReason: string | null;
+  reportsSinceCompletion: number;
+} {
   if (!mplads || mplads.status !== 'Completed' || !mplads.completionDate) {
-    return { disputed: false, disputeReason: null };
+    return { disputed: false, disputeReason: null, reportsSinceCompletion: 0 };
   }
   const completedAt = new Date(mplads.completionDate);
   const after = complaints.filter((c) => new Date(c.createdAt) > completedAt);
-  if (complaints.length >= 2 && after.length === complaints.length) {
+  if (complaints.length >= 2 && after.length >= 2) {
     const dateStr = new Date(mplads.completionDate).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -232,28 +243,34 @@ function computeDispute(
     });
     return {
       disputed: true,
-      disputeReason: `Official record marks this work completed on ${dateStr} (₹${mplads.amountLakh}L sanctioned), but ${complaints.length} citizen complaints about the same problem post-date the recorded completion. Objective mismatch between two data sources: official record vs ground reports — physical verification recommended.`,
+      disputeReason: `Official record marks this work completed on ${dateStr} (₹${mplads.amountLakh}L sanctioned), but ${after.length} citizen complaints about the same problem post-date the recorded completion. Objective mismatch between two data sources: official record vs ground reports — physical verification recommended.`,
+      reportsSinceCompletion: after.length,
     };
   }
-  return { disputed: false, disputeReason: null };
+  return { disputed: false, disputeReason: null, reportsSinceCompletion: after.length };
 }
 
 function computeFundSummary(issues: IssueView[], records: MpladsRecord[]): FundSummary {
   const sanctionedLakh = records.reduce((s, r) => s + r.amountLakh, 0);
-  const matched = issues.filter((i) => i.mplads);
-  const tiedLakh = matched.reduce((s, i) => s + (i.mplads?.amountLakh ?? 0), 0);
+  // The accountability punchline: sanctioned money tied to issues that are
+  // STILL open on the ground (disputed completions count as still-open).
+  const tied = issues.filter(
+    (i) => i.mplads && (i.mplads.status !== 'Completed' || i.disputed),
+  );
+  const tiedLakh = tied.reduce((s, i) => s + (i.mplads?.amountLakh ?? 0), 0);
   return {
     entitlementLakh: MPLADS_ENTITLEMENT_LAKH,
     sanctionedLakh,
     tiedToOpenComplaintsLakh: tiedLakh,
-    matchedWorksCount: matched.length,
+    matchedWorksCount: issues.filter((i) => i.mplads).length,
     totalWorksCount: records.length,
     delayedWorksCount: records.filter((r) => r.status === 'Delayed').length,
   };
 }
 
-export function getDashboardState(): DashboardState {
-  const store = getStore();
+export function getDashboardState(constituencyId: string): DashboardState {
+  const store = getStore(constituencyId);
+  const records = CONSTITUENCY_SEEDS[constituencyId].mplads;
   const complaintById = new Map(store.complaints.map((c) => [c.id, c]));
   const oneHourAgo = Date.now() - 60 * 60_000;
 
@@ -273,18 +290,23 @@ export function getDashboardState(): DashboardState {
       (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt),
     );
     const verification = computeVerification(complaints);
-    const mplads = matchMplads(issue, MPLADS_RECORDS);
-    const { disputed, disputeReason } = computeDispute(complaints, mplads);
+    const mplads = matchMplads(issue, records);
+    const { disputed, disputeReason, reportsSinceCompletion } = computeDispute(complaints, mplads);
+    // Coordinated campaigns are quarantined from the ranking (rank capped at
+    // urgency, pending human review) — ARCHITECTURE.md Module 3.
+    const quarantined = verification.coordinationSuspected;
     return {
       ...issue,
       urgency,
       count,
       distinctCount: verification.distinctSubmitters,
-      priority: verification.distinctSubmitters * urgency, // verified ranking
-      rawPriority: count * urgency, // what raw volume would have scored
+      priority: (quarantined ? 1 : verification.distinctSubmitters) * urgency,
+      rawPriority: count * urgency, // what raw volume alone would have scored
       verification,
       disputed,
       disputeReason,
+      reportsSinceCompletion,
+      quarantined,
       mplads,
       recentCount,
       sampleComplaints: sorted.slice(0, 3),
@@ -330,7 +352,7 @@ export function getDashboardState(): DashboardState {
     }
     return e;
   };
-  for (const r of MPLADS_RECORDS) ensureWard(r.ward);
+  for (const r of records) ensureWard(r.ward);
   for (const iv of issueViews) {
     if (!iv.ward || iv.ward === 'Unknown') continue;
     const e = ensureWard(iv.ward);
@@ -348,17 +370,18 @@ export function getDashboardState(): DashboardState {
       complaintCount: v.complaintCount,
       issueCount: v.issueCount,
       topIssue: v.topIssue || null,
-      hasMplads: MPLADS_RECORDS.some((r) => r.ward === ward),
+      hasMplads: records.some((r) => r.ward === ward),
     }))
     .sort((a, b) => wardNumber(a.ward) - wardNumber(b.ward));
 
   return {
+    constituency: constituencyMeta(constituencyId),
     complaints: complaintsDesc,
     issues: issueViews,
-    fundSummary: computeFundSummary(issueViews, MPLADS_RECORDS),
+    fundSummary: computeFundSummary(issueViews, records),
     verificationSummary,
     wardStats,
-    livePoolRemaining: LIVE_POOL.length - store.livePoolIndex,
+    livePoolRemaining: CONSTITUENCY_SEEDS[constituencyId].livePool.length - store.livePoolIndex,
     totalComplaints: store.complaints.length,
     aiClassifiedCount: store.aiClassifiedCount,
     clusterSavings: store.complaints.length - store.issues.length,
@@ -387,8 +410,11 @@ export interface RegisterComplaintInput {
   matchedIssueId: string | null;
 }
 
-export function registerComplaint(input: RegisterComplaintInput): NewComplaintResult {
-  const store = getStore();
+export function registerComplaint(
+  constituencyId: string,
+  input: RegisterComplaintInput,
+): NewComplaintResult {
+  const store = getStore(constituencyId);
   const id = `c-${String(store.complaints.length + 1).padStart(3, '0')}-${Date.now()
     .toString(36)
     .slice(-4)}`;
@@ -446,34 +472,45 @@ export function registerComplaint(input: RegisterComplaintInput): NewComplaintRe
   return { complaint, issue, isNewIssue };
 }
 
-export function getIssueById(issueId: string): IssueView | null {
-  const state = getDashboardState();
+export function getIssueById(constituencyId: string, issueId: string): IssueView | null {
+  const state = getDashboardState(constituencyId);
   return state.issues.find((i) => i.id === issueId) ?? null;
 }
 
-export function getComplaintsForIssue(issueId: string): Complaint[] {
-  const store = getStore();
+export function getComplaintsForIssue(constituencyId: string, issueId: string): Complaint[] {
+  const store = getStore(constituencyId);
   return store.complaints
     .filter((c) => c.issueId === issueId)
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 }
 
-export function nextPoolItem(): { text: string; source: Complaint['source']; submittedBy: string } | null {
-  const store = getStore();
-  if (store.livePoolIndex >= LIVE_POOL.length) return null;
-  const item = LIVE_POOL[store.livePoolIndex];
+export function nextPoolItem(
+  constituencyId: string,
+): { text: string; source: Complaint['source']; submittedBy: string } | null {
+  const store = getStore(constituencyId);
+  const pool = CONSTITUENCY_SEEDS[constituencyId].livePool;
+  if (store.livePoolIndex >= pool.length) return null;
+  const item = pool[store.livePoolIndex];
   store.livePoolIndex += 1;
   return item;
 }
 
-export function getReportCache(key: string): { report: unknown; countAtGeneration: number } | undefined {
-  return getStore().reportCache.get(key);
+export function getReportCache(
+  constituencyId: string,
+  key: string,
+): { report: unknown; countAtGeneration: number } | undefined {
+  return getStore(constituencyId).reportCache.get(key);
 }
 
-export function setReportCache(key: string, report: unknown, countAtGeneration: number): void {
-  getStore().reportCache.set(key, { report, countAtGeneration });
+export function setReportCache(
+  constituencyId: string,
+  key: string,
+  report: unknown,
+  countAtGeneration: number,
+): void {
+  getStore(constituencyId).reportCache.set(key, { report, countAtGeneration });
 }
 
-export function getMpladsRecords(): MpladsRecord[] {
-  return MPLADS_RECORDS;
+export function getMpladsRecords(constituencyId: string): MpladsRecord[] {
+  return CONSTITUENCY_SEEDS[constituencyId].mplads;
 }

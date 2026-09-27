@@ -1,6 +1,5 @@
 'use client';
 
-import { MapPinned } from 'lucide-react';
 import { WardStat } from '@/lib/types';
 
 interface WardMapProps {
@@ -9,41 +8,41 @@ interface WardMapProps {
   onSelect: (ward: string | null) => void;
 }
 
-/** All 12 constituency wards — fixed 4×3 grid (hand-built inline SVG,
- *  no tile server, per ARCHITECTURE.md open-infrastructure constraints). */
-const ALL_WARDS = Array.from({ length: 12 }, (_, i) => `Ward ${i + 1}`);
-
 const CELL_W = 88;
 const CELL_H = 62;
 const GAP = 10;
 const COLS = 4;
 
+/** Dark-mode density scale (quiet → 1–2 → 3–5 → 6+). */
 function densityStyle(count: number): { fill: string; text: string; sub: string } {
-  if (count <= 0) return { fill: '#f1f5f9', text: '#94a3b8', sub: '#cbd5e1' };
-  if (count <= 2) return { fill: '#a7f3d0', text: '#065f46', sub: '#047857' };
-  if (count <= 5) return { fill: '#fcd34d', text: '#78350f', sub: '#92400e' };
-  return { fill: '#f87171', text: '#7f1d1d', sub: '#991b1b' };
+  if (count <= 0) return { fill: '#1F2937', text: '#6B7280', sub: '#4B5563' };
+  if (count <= 2) return { fill: '#1A2E05', text: '#BEF264', sub: '#65A30D' };
+  if (count <= 5) return { fill: '#451A03', text: '#FCD34D', sub: '#D97706' };
+  return { fill: '#450A0A', text: '#FCA5A5', sub: '#DC2626' };
 }
 
+/**
+ * Inline SVG ward hotspot grid — hand-built, no tile server (open-infrastructure
+ * constraint). Wards are derived from the data (complaints + MPLADS works),
+ * so each constituency renders its own map.
+ */
 export function WardMap({ stats, selected, onSelect }: WardMapProps) {
+  const wards = stats.map((s) => s.ward);
   const byWard = new Map(stats.map((s) => [s.ward, s]));
-  const rows = Math.ceil(ALL_WARDS.length / COLS);
+  const rows = Math.max(1, Math.ceil(wards.length / COLS));
   const width = COLS * CELL_W + (COLS - 1) * GAP;
   const height = rows * CELL_H + (rows - 1) * GAP;
 
   return (
     <section
       aria-label="Ward complaint hotspot map"
-      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="rounded-xl border border-[#374151] bg-[#1F2937] p-4"
     >
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-          <MapPinned className="h-4 w-4 text-slate-500" aria-hidden />
-          Ward hotspots
-        </h2>
-        <p className="text-[11px] text-slate-400">
-          complaint density · <span className="font-semibold text-slate-500">₹</span> = MPLADS
-          work on record · click a ward to filter
+        <h2 className="text-sm font-bold text-white">🗺️ Ward hotspots</h2>
+        <p className="text-[11px] text-gray-500">
+          complaint density · <span className="font-semibold text-amber-500">₹</span> =
+          MPLADS work on record · click a ward to filter
         </p>
       </div>
 
@@ -53,7 +52,7 @@ export function WardMap({ stats, selected, onSelect }: WardMapProps) {
         role="group"
         aria-label="Map of constituency wards colored by complaint density"
       >
-        {ALL_WARDS.map((ward, i) => {
+        {wards.map((ward, i) => {
           const stat = byWard.get(ward);
           const count = stat?.complaintCount ?? 0;
           const col = i % COLS;
@@ -97,7 +96,7 @@ export function WardMap({ stats, selected, onSelect }: WardMapProps) {
                 height={CELL_H}
                 rx={10}
                 fill={d.fill}
-                stroke={isSelected ? '#047857' : '#e2e8f0'}
+                stroke={isSelected ? '#D97706' : '#374151'}
                 strokeWidth={isSelected ? 3 : 1}
               />
               <text
@@ -137,7 +136,7 @@ export function WardMap({ stats, selected, onSelect }: WardMapProps) {
                   fontSize={11}
                   fontWeight={800}
                   textAnchor="end"
-                  fill={d.sub}
+                  fill="#D97706"
                   aria-label="MPLADS work on record"
                 >
                   ₹
@@ -148,28 +147,28 @@ export function WardMap({ stats, selected, onSelect }: WardMapProps) {
         })}
       </svg>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-400">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-100 ring-1 ring-slate-200" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[#1F2937] ring-1 ring-[#374151]" />
           quiet
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-200" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-lime-950 ring-1 ring-lime-700" />
           1–2
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-300" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-950 ring-1 ring-amber-700" />
           3–5
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-400" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-red-950 ring-1 ring-red-800" />
           6+
         </span>
         {selected && (
           <button
             type="button"
             onClick={() => onSelect(null)}
-            className="ml-auto rounded-full bg-emerald-50 px-2.5 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100"
+            className="ml-auto rounded-full bg-amber-950/60 px-2.5 py-0.5 font-bold text-amber-400 ring-1 ring-amber-800 transition-colors hover:bg-amber-900/60"
           >
             {selected} — clear ✕
           </button>

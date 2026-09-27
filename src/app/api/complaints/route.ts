@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDashboardState } from '@/lib/store';
 import { processIncomingComplaint } from '@/lib/pipeline';
+import { LIVE_CONSTITUENCY_IDS } from '@/lib/constituencies';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Citizen submits a complaint (any language, any channel).
+ * Citizen submits a complaint (any language, any channel) into a constituency.
  * Runs the live LLM pipeline: classify → translate → urgency → cluster match.
  */
 export async function POST(req: NextRequest) {
@@ -15,7 +16,16 @@ export async function POST(req: NextRequest) {
       text?: string;
       submittedBy?: string;
       source?: string;
+      constituencyId?: string;
     };
+
+    const constituencyId = body.constituencyId ?? 'nagpur';
+    if (!LIVE_CONSTITUENCY_IDS.includes(constituencyId)) {
+      return NextResponse.json(
+        { error: `Unknown constituency "${constituencyId}".` },
+        { status: 400 },
+      );
+    }
 
     const text = (body.text ?? '').trim();
     if (!text) {
@@ -38,6 +48,7 @@ export async function POST(req: NextRequest) {
       : 'App';
 
     const result = await processIncomingComplaint(
+      constituencyId,
       text,
       source,
       (body.submittedBy ?? 'Anonymous citizen').trim() || 'Anonymous citizen',
@@ -47,7 +58,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       complaint: result.complaint,
       isNewIssue: result.isNewIssue,
-      state: getDashboardState(),
+      state: getDashboardState(constituencyId),
     });
   } catch (err) {
     console.error('[api/complaints] failed:', err);

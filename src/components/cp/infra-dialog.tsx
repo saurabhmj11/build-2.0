@@ -4,7 +4,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Database,
-  Languages,
   Mic,
   Quote,
   Waypoints,
@@ -80,61 +79,60 @@ const PRODUCTION_STACK: { title: string; license: string; detail: string }[] = [
 export function InfraDialog({ open, onOpenChange }: InfraDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-2xl overflow-hidden p-0 sm:rounded-2xl">
-        <DialogHeader className="border-b border-slate-100 bg-slate-50/70 px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-            <Languages className="h-4 w-4 text-emerald-700" aria-hidden />
-            Open infrastructure — demo today, production tomorrow
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-2xl overflow-hidden border-[#374151] p-0 sm:rounded-2xl">
+        <DialogHeader className="border-b border-[#374151] bg-[#1F2937] px-5 py-4">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-white">
+            🛰️ Open infrastructure — demo today, production tomorrow
           </DialogTitle>
-          <DialogDescription className="text-xs leading-relaxed text-slate-500">
+          <DialogDescription className="text-xs leading-relaxed text-gray-400">
             What runs live in this demo vs. the open-source / public-data stack it
             graduates to. Nothing in the production roadmap is proprietary.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[65vh]">
+        <ScrollArea className="max-h-[65vh] bg-[#111827]">
           <div className="grid gap-5 px-5 py-4 sm:grid-cols-2">
             <section aria-label="Live in this demo">
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-700">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-400">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                 Live in this demo
               </h3>
               <ul className="space-y-3">
                 {DEMO_STACK.map((s) => (
-                  <li key={s.title} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
-                    <p className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800">
-                      <s.Icon className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
+                  <li key={s.title} className="rounded-lg border border-emerald-900/70 bg-emerald-950/25 p-3">
+                    <p className="flex items-center gap-1.5 text-[13px] font-bold text-white">
+                      <s.Icon className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden />
                       {s.title}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">{s.detail}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-gray-400">{s.detail}</p>
                   </li>
                 ))}
               </ul>
             </section>
 
             <section aria-label="Production roadmap">
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-400">
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                 Production roadmap — open-source &amp; public data
               </h3>
               <ul className="space-y-3">
                 {PRODUCTION_STACK.map((s) => (
-                  <li key={s.title} className="rounded-lg border border-slate-200 bg-white p-3">
-                    <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-bold text-slate-800">
+                  <li key={s.title} className="rounded-lg border border-[#374151] bg-[#1F2937] p-3">
+                    <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-bold text-white">
                       {s.title}
-                      <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                      <span className="rounded-full bg-[#374151] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-400">
                         {s.license}
                       </span>
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">{s.detail}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-gray-400">{s.detail}</p>
                   </li>
                 ))}
               </ul>
             </section>
           </div>
 
-          <div className="mx-5 mb-5 rounded-lg border-l-4 border-emerald-600 bg-emerald-50/60 p-3.5">
-            <p className="flex items-start gap-2 text-[13px] font-medium leading-relaxed text-emerald-900">
+          <div className="mx-5 mb-5 rounded-lg border-l-4 border-amber-600 bg-amber-950/25 p-3.5">
+            <p className="flex items-start gap-2 text-[13px] font-medium leading-relaxed text-amber-100">
               <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               &ldquo;The demo runs on an LLM API plus browser-native voice input to
               prove the UX in two hours; production swaps in AI4Bharat&apos;s

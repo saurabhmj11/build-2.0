@@ -1,75 +1,40 @@
 'use client';
 
-import { AlertTriangle, IndianRupee, Layers, Landmark } from 'lucide-react';
 import { FundSummary } from '@/lib/types';
 import { formatLakh } from '@/lib/client-format';
 
 interface FundStripProps {
   fund: FundSummary;
-  totalComplaints: number;
-  totalIssues: number;
 }
 
-export function FundStrip({ fund, totalComplaints, totalIssues }: FundStripProps) {
-  const cards = [
-    {
-      label: 'MPLADS entitlement',
-      value: formatLakh(fund.entitlementLakh),
-      sub: 'per MP · per year',
-      Icon: Landmark,
-      iconCls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    },
-    {
-      label: 'Sanctioned works on record',
-      value: formatLakh(fund.sanctionedLakh),
-      sub: `${fund.totalWorksCount} works recommended`,
-      Icon: IndianRupee,
-      iconCls: 'bg-teal-50 text-teal-700 border-teal-200',
-    },
-    {
-      label: 'Tied to still-open complaints',
-      value: formatLakh(fund.tiedToOpenComplaintsLakh),
-      sub: `${fund.matchedWorksCount} matched works · ${fund.delayedWorksCount} delayed`,
-      Icon: AlertTriangle,
-      iconCls: 'bg-red-50 text-red-700 border-red-200',
-    },
-    {
-      label: 'Signal extracted',
-      value: `${totalIssues} issues`,
-      sub: `${totalComplaints} complaints de-duplicated`,
-      Icon: Layers,
-      iconCls: 'bg-amber-50 text-amber-700 border-amber-200',
-    },
-  ];
-
+/**
+ * DESIGN.md — a thin ONE-LINE context strip above the ranked cards.
+ * The "tied to still-open complaints" number is the accountability punchline.
+ */
+export function FundStrip({ fund }: FundStripProps) {
   return (
-    <section aria-label="MPLADS fund accountability summary">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {cards.map((c) => (
-          <div
-            key={c.label}
-            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${c.iconCls}`}
-            >
-              <c.Icon className="h-4.5 w-4.5" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-slate-500">{c.label}</p>
-              <p className="text-xl font-bold leading-tight text-slate-900">{c.value}</p>
-              <p className="truncate text-[11px] text-slate-400">{c.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 px-1 text-[11px] leading-relaxed text-slate-400">
-        Accurate framing: MPs <span className="font-medium text-slate-500">recommend</span> works
-        under MPLADS; funds are released by the government to the{' '}
-        <span className="font-medium text-slate-500">district implementing agency</span>. Records
-        verify what was sanctioned and its completion status — they do not track the MP&apos;s
-        personal money.
-      </p>
+    <section
+      aria-label="MPLADS fund accountability summary"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#374151] bg-[#1F2937] px-3.5 py-2 text-xs text-gray-400"
+    >
+      <span className="font-semibold text-gray-300">MPLADS Entitlement</span>
+      <span className="text-white">{formatLakh(fund.entitlementLakh)}/yr</span>
+      <span className="text-gray-600">|</span>
+      <span className="font-semibold text-gray-300">Sanctioned so far</span>
+      <span className="text-white">
+        {formatLakh(fund.sanctionedLakh)}
+        <span className="ml-1 text-[10px] text-gray-500">
+          ({fund.totalWorksCount} works · {fund.delayedWorksCount} delayed)
+        </span>
+      </span>
+      <span className="text-gray-600">|</span>
+      <span className="font-semibold text-gray-300">Tied to still-open complaints</span>
+      <span className="font-bold text-amber-400" title="Sanctioned money sitting on issues the ground says are not fixed">
+        {formatLakh(fund.tiedToOpenComplaintsLakh)}
+      </span>
+      <span className="ml-auto text-[10px] text-gray-600">
+        MPs recommend works; district agencies implement &amp; disburse
+      </span>
     </section>
   );
 }

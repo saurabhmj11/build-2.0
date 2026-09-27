@@ -6,6 +6,7 @@ import {
   getReportCache,
   setReportCache,
 } from '@/lib/store';
+import { LIVE_CONSTITUENCY_IDS } from '@/lib/constituencies';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -16,25 +17,30 @@ export const maxDuration = 120;
  * regenerate the report.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ issueId: string }> },
 ) {
   try {
     const { issueId } = await params;
-    const issue = getIssueById(issueId);
+    const constituencyId = req.nextUrl.searchParams.get('c') ?? 'nagpur';
+    if (!LIVE_CONSTITUENCY_IDS.includes(constituencyId)) {
+      return NextResponse.json({ error: `Unknown constituency "${constituencyId}".` }, { status: 400 });
+    }
+
+    const issue = getIssueById(constituencyId, issueId);
     if (!issue) {
       return NextResponse.json({ error: 'Issue not found.' }, { status: 404 });
     }
 
-    const complaints = getComplaintsForIssue(issueId);
+    const complaints = getComplaintsForIssue(constituencyId, issueId);
     const cacheKey = `${issueId}:${issue.count}`;
-    const cached = getReportCache(cacheKey);
+    const cached = getReportCache(constituencyId, cacheKey);
     if (cached) {
       return NextResponse.json({ ok: true, report: cached.report, cached: true });
     }
 
     const report = await generateReport(issue, complaints, issue.mplads);
-    setReportCache(cacheKey, report, issue.count);
+    setReportCache(constituencyId, cacheKey, report, issue.count);
 
     return NextResponse.json({ ok: true, report, cached: false });
   } catch (err) {

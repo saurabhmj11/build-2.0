@@ -1,10 +1,12 @@
 'use client';
 
-import { Inbox, Languages, Sparkles } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Complaint } from '@/lib/types';
-import { CATEGORY_STYLE, SOURCE_ICON, timeAgo, urgencyStyle } from '@/lib/client-format';
+import {
+  maskSubmitterId,
+  SOURCE_EMOJI,
+  timeAgo,
+  urgencyStyle,
+} from '@/lib/client-format';
 
 interface LiveFeedProps {
   complaints: Complaint[];
@@ -15,55 +17,33 @@ interface LiveFeedProps {
 const FRESH_WINDOW_MS = 45_000;
 
 function FeedItem({ complaint }: { complaint: Complaint }) {
-  const Icon = SOURCE_ICON[complaint.source] ?? SOURCE_ICON.App;
   const urg = urgencyStyle(complaint.urgency);
   const isNew = Date.now() - new Date(complaint.createdAt).getTime() < FRESH_WINDOW_MS;
   return (
     <article
-      className={`cp-slide-in rounded-lg border p-3 ${
+      className={`cp-slide-in rounded-md border-l-[3px] py-2 pl-2.5 pr-2 ${
         isNew
-          ? 'border-emerald-400 bg-emerald-50/60 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]'
-          : 'border-slate-200 bg-white'
+          ? 'bg-[#2b3546] ring-1 ring-amber-600/40'
+          : 'bg-[#1F2937]/60'
       }`}
+      style={{ borderLeftColor: urg.hex }}
     >
-      <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-          <span className="truncate font-medium text-slate-700">{complaint.submittedBy}</span>
-        </div>
-        <time className="shrink-0" dateTime={complaint.createdAt}>
-          {timeAgo(complaint.createdAt)}
-        </time>
-      </div>
-
-      <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-800" lang={complaint.language === 'English' ? 'en' : undefined}>
-        {complaint.textOriginal}
+      {/* Raw complaint text, exactly as received — the mess IS the pitch */}
+      <p
+        className="line-clamp-2 text-[13px] leading-snug text-gray-200"
+        lang={complaint.language === 'English' ? 'en' : undefined}
+      >
+        🗣 {complaint.textOriginal}
       </p>
-      <p className="mt-1 line-clamp-2 border-l-2 border-emerald-300 pl-2 text-[12px] italic leading-snug text-slate-500">
-        {complaint.translationEn}
-      </p>
-
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Badge
-          variant="outline"
-          className={`px-1.5 py-0 text-[10px] font-semibold ${CATEGORY_STYLE[complaint.category]}`}
-        >
-          {complaint.category}
-        </Badge>
-        <span
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${urg.cls}`}
-          title={`Urgency ${complaint.urgency}/5`}
-        >
-          U{complaint.urgency} {urg.label}
-        </span>
-        <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-          <Languages className="h-2.5 w-2.5" aria-hidden />
-          {complaint.language}
-        </span>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
+        <span>📍 {complaint.ward}</span>
+        <time dateTime={complaint.createdAt}>{timeAgo(complaint.createdAt)}</time>
+        <span aria-hidden>{SOURCE_EMOJI[complaint.source] ?? '📱'} {complaint.source}</span>
+        <span className="font-mono">{maskSubmitterId(complaint.submitterId)}</span>
+        <span>{complaint.language}</span>
         {complaint.aiClassified && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
-            <Sparkles className="h-2.5 w-2.5" aria-hidden />
-            AI classified
+          <span className="rounded-sm bg-amber-950/70 px-1 py-px font-bold text-amber-400 ring-1 ring-amber-800">
+            AI
           </span>
         )}
       </div>
@@ -75,44 +55,40 @@ export function LiveFeed({ complaints, processing }: LiveFeedProps) {
   return (
     <section
       aria-label="Live complaint intake feed"
-      className="flex max-h-[calc(100vh-13rem)] min-h-[420px] flex-col rounded-xl border border-slate-200 bg-slate-50/60 shadow-sm"
+      className="flex max-h-[calc(100vh-9.5rem)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-[#374151] bg-[#1F2937]/40"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-[#374151] px-4 py-3">
         <div className="flex items-center gap-2">
-          <Inbox className="h-4 w-4 text-slate-500" aria-hidden />
-          <h2 className="text-sm font-bold text-slate-800">Live intake</h2>
-          <span className="flex items-center gap-1 text-[11px] font-medium text-slate-400">
+          <h2 className="text-sm font-bold text-white">Incoming feed</h2>
+          <span className="flex items-center gap-1 text-[11px] font-medium text-gray-500">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600" />
             </span>
-            WhatsApp · calls · letters · walk-ins
+            raw · multilingual · as received
           </span>
         </div>
-        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-sm">
+        <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[11px] font-semibold text-gray-300">
           {complaints.length}
         </span>
       </div>
 
-      <ScrollArea className="flex-1 px-3 py-3">
-        <div className="flex flex-col gap-2.5">
-          {processing && (
-            <div className="animate-pulse rounded-lg border-2 border-dashed border-emerald-400 bg-emerald-50/50 p-3">
-              <p className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                Incoming complaint — AI translating &amp; classifying…
-              </p>
-              <div className="mt-2 space-y-1.5">
-                <div className="h-2 w-full rounded bg-emerald-200/70" />
-                <div className="h-2 w-4/5 rounded bg-emerald-200/50" />
-              </div>
+      <div className="cp-scroll flex-1 space-y-1.5 overflow-y-auto px-2.5 py-2.5">
+        {processing && (
+          <div className="animate-pulse rounded-md border-2 border-dashed border-amber-700/60 bg-amber-950/20 p-3">
+            <p className="text-xs font-semibold text-amber-400">
+              ⚡ Incoming complaint — AI translating &amp; classifying…
+            </p>
+            <div className="mt-2 space-y-1.5">
+              <div className="h-2 w-full rounded bg-amber-900/50" />
+              <div className="h-2 w-4/5 rounded bg-amber-900/40" />
             </div>
-          )}
-          {complaints.map((c) => (
-            <FeedItem key={c.id} complaint={c} />
-          ))}
-        </div>
-      </ScrollArea>
+          </div>
+        )}
+        {complaints.map((c) => (
+          <FeedItem key={c.id} complaint={c} />
+        ))}
+      </div>
     </section>
   );
 }

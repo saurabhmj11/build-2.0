@@ -1,61 +1,70 @@
-import {
-  Ban,
-  CheckCircle2,
-  Clock3,
-  FileText,
-  Footprints,
-  Mail,
-  MessageCircle,
-  Mic,
-  Phone,
-  Smartphone,
-} from 'lucide-react';
 import { Category, MpladsStatus, Urgency, URGENCY_LABEL } from './types';
 
-/** Soft category chip colors (no indigo/blue). */
-export const CATEGORY_STYLE: Record<Category, string> = {
-  Roads: 'bg-stone-100 text-stone-700 border-stone-300',
-  Water: 'bg-teal-50 text-teal-700 border-teal-300',
-  Sanitation: 'bg-lime-50 text-lime-800 border-lime-300',
-  Electricity: 'bg-amber-50 text-amber-700 border-amber-300',
-  Health: 'bg-red-50 text-red-700 border-red-300',
-  Education: 'bg-orange-50 text-orange-800 border-orange-300',
-  Parks: 'bg-green-50 text-green-700 border-green-300',
-  Safety: 'bg-rose-50 text-rose-700 border-rose-300',
-  Other: 'bg-slate-100 text-slate-600 border-slate-300',
+/**
+ * DESIGN.md — urgency-coded color system (NOT category-coded):
+ *  5 #DC2626 · 4 #EA580C · 3 #D97706 · 2 #65A30D · 1 #6B7280
+ * Background #111827, card #1F2937, border #374151, disputed rose #B91C4A.
+ */
+export const URGENCY_HEX: Record<number, string> = {
+  1: '#6B7280',
+  2: '#65A30D',
+  3: '#D97706',
+  4: '#EA580C',
+  5: '#DC2626',
 };
 
-export function urgencyStyle(u: Urgency | number): { label: string; cls: string } {
-  const label = URGENCY_LABEL[(Math.min(5, Math.max(1, u)) as Urgency)] ?? 'Medium';
-  switch (u) {
-    case 5:
-      return { label, cls: 'bg-red-600 text-white' };
-    case 4:
-      return { label, cls: 'bg-orange-500 text-white' };
-    case 3:
-      return { label, cls: 'bg-amber-400 text-amber-950' };
-    case 2:
-      return { label, cls: 'bg-yellow-200 text-yellow-900' };
-    default:
-      return { label, cls: 'bg-slate-200 text-slate-700' };
-  }
+/** Deep rose — distinct from every urgency red (Module 4b disputed signal). */
+export const DISPUTED_HEX = '#B91C4A';
+/** Amber for MPLADS sanction strips ("separate fact", dashed border). */
+export const SANCTION_HEX = '#D97706';
+
+/** Muted dark category chips — categories are labels, never priority signals. */
+export const CATEGORY_STYLE: Record<Category, string> = {
+  Roads: 'bg-stone-800 text-stone-300 border-stone-600',
+  Water: 'bg-teal-950 text-teal-300 border-teal-800',
+  Drainage: 'bg-cyan-950 text-cyan-300 border-cyan-800',
+  Sanitation: 'bg-lime-950 text-lime-300 border-lime-800',
+  Electricity: 'bg-amber-950 text-amber-300 border-amber-800',
+  Health: 'bg-red-950 text-red-300 border-red-800',
+  Education: 'bg-orange-950 text-orange-300 border-orange-800',
+  Parks: 'bg-green-950 text-green-300 border-green-800',
+  Safety: 'bg-rose-950 text-rose-300 border-rose-800',
+  Pollution: 'bg-zinc-800 text-zinc-300 border-zinc-600',
+  Other: 'bg-slate-800 text-slate-300 border-slate-600',
+};
+
+export function urgencyStyle(u: Urgency | number): { label: string; hex: string } {
+  const clamped = Math.min(5, Math.max(1, u));
+  return {
+    label: URGENCY_LABEL[clamped as Urgency] ?? 'Medium',
+    hex: URGENCY_HEX[clamped],
+  };
 }
 
-export const MPLADS_STATUS_STYLE: Record<MpladsStatus, { cls: string; Icon: typeof Clock3 }> = {
-  Delayed: { cls: 'text-red-700 bg-red-50 border-red-200', Icon: Ban },
-  Ongoing: { cls: 'text-amber-700 bg-amber-50 border-amber-200', Icon: Clock3 },
-  Completed: { cls: 'text-emerald-700 bg-emerald-50 border-emerald-200', Icon: CheckCircle2 },
-  'Sanctioned – not started': { cls: 'text-slate-700 bg-slate-100 border-slate-300', Icon: FileText },
+export const MPLADS_STATUS_LABEL: Record<MpladsStatus, string> = {
+  Delayed: 'DELAYED',
+  Ongoing: 'ONGOING',
+  Completed: 'COMPLETED',
+  'Sanctioned – not started': 'NOT STARTED',
 };
 
-export const SOURCE_ICON: Record<string, typeof Phone> = {
-  WhatsApp: MessageCircle,
-  Phone: Phone,
-  Letter: Mail,
-  'Walk-in': Footprints,
-  App: Smartphone,
-  'Voice note': Mic,
+/** DESIGN.md: emoji markers, no custom icon assets. */
+export const SOURCE_EMOJI: Record<string, string> = {
+  WhatsApp: '💬',
+  Phone: '📞',
+  Letter: '✉️',
+  'Walk-in': '🚶',
+  App: '📱',
+  'Voice note': '🎙️',
 };
+
+/** Mask a mock phone identity for the feed: PH-98201-7711 → •••• 7711 */
+export function maskSubmitterId(submitterId: string): string {
+  const m = submitterId.match(/^PH-[\d]+-(\d{4})$/);
+  if (m) return `•••• ${m[1]}`;
+  if (submitterId.startsWith('citizen:')) return '🆔 new';
+  return submitterId.length > 6 ? `${submitterId.slice(0, 4)}…` : submitterId;
+}
 
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -72,4 +81,13 @@ export function formatLakh(lakh: number): string {
     return `₹${(lakh / 100).toFixed(2)} Cr`;
   }
   return `₹${lakh.toFixed(lakh % 1 === 0 ? 0 : 1)}L`;
+}
+
+/** Short date for sanction/completion strips: "14 Feb 2026" */
+export function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }

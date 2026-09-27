@@ -1,20 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  BadgeIndianRupee,
-  Check,
-  ClipboardCopy,
-  FileText,
-  Gavel,
-  ListChecks,
-  Loader2,
-  ScrollText,
-  ShieldAlert,
-  Sparkles,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Check, ClipboardCopy, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,10 +14,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { IssueView, Report } from '@/lib/types';
-import { CATEGORY_STYLE, formatLakh } from '@/lib/client-format';
+import { formatLakh, shortDate } from '@/lib/client-format';
 
 interface ReportDialogProps {
   issue: IssueView;
+  constituencyId: string;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -76,10 +64,11 @@ function reportToPlainText(r: Report, issue: IssueView): string {
 }
 
 /**
- * Mounted fresh on every open (see page.tsx), so initial state doubles as the
- * "dialog just opened" reset — no synchronous setState needed inside effects.
+ * Mounted fresh on every open (see page.tsx). Styled as an OFFICIAL MEMO —
+ * a light "paper" card inside the dark shell, signalling "this is the
+ * deliverable" (DESIGN.md).
  */
-export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
+export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDialogProps) {
   const { toast } = useToast();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,7 +78,7 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/report/${issue.id}`)
+    fetch(`/api/report/${issue.id}?c=${constituencyId}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -106,7 +95,7 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
     return () => {
       cancelled = true;
     };
-  }, [issue.id, attempt]);
+  }, [issue.id, constituencyId, attempt]);
 
   const copy = async (text: string, label: string) => {
     try {
@@ -125,244 +114,288 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
     setAttempt((a) => a + 1);
   };
 
+  const mpl = issue.mplads;
+
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-3xl overflow-hidden p-0 sm:rounded-2xl">
-        <DialogHeader className="border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+      <DialogContent className="max-h-[92vh] w-[95vw] max-w-3xl overflow-hidden border-[#374151] p-0 sm:rounded-2xl">
+        <DialogHeader className="border-b border-[#374151] bg-[#1F2937] px-5 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="outline"
-              className={`px-2 py-0.5 text-[10px] font-semibold ${CATEGORY_STYLE[issue.category]}`}
-            >
+            <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-300">
               {issue.category}
-            </Badge>
-            <span className="text-xs font-medium text-slate-500">
+            </span>
+            <span className="text-xs font-medium text-gray-400">
               {issue.ward} · {issue.count} {issue.count === 1 ? 'report' : 'reports'} ·{' '}
-              {issue.distinctCount} distinct {issue.distinctCount === 1 ? 'citizen' : 'citizens'} ·
-              urgency {issue.urgency}/5
+              {issue.distinctCount} distinct{' '}
+              {issue.distinctCount === 1 ? 'citizen' : 'citizens'} · urgency{' '}
+              {issue.urgency}/5
             </span>
             {report?.aiGenerated && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                <Sparkles className="h-2.5 w-2.5" aria-hidden />
-                AI-generated
+              <span className="rounded-full bg-amber-950/70 px-2 py-0.5 text-[10px] font-bold text-amber-400 ring-1 ring-amber-800">
+                ✨ AI-generated
               </span>
             )}
           </div>
-          <DialogTitle className="text-lg font-bold leading-snug text-slate-900">
+          <DialogTitle className="text-lg font-bold leading-snug text-white">
             {report?.headline ?? `Department report — ${issue.title}`}
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500">
-            {report?.department ?? 'Assigning department…'} · Action report for office staff
+          <DialogDescription className="text-xs text-gray-400">
+            {report?.department ?? 'Assigning department…'} · Official memo for office
+            staff
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[65vh]">
-          <div className="space-y-5 px-5 py-4">
-            {loading && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Compiling report — summary, 3-point action plan, budget estimate, RTI draft…
+        <ScrollArea className="max-h-[68vh] bg-[#111827]">
+          {/* The memo — light paper card inside the dark shell */}
+          <div className="px-4 py-4 sm:px-5">
+            <div className="rounded-xl bg-[#FBFAF7] p-5 text-gray-900 shadow-2xl sm:p-6">
+              {loading && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Compiling memo — summary, 3-point action plan, budget estimate,
+                    RTI draft…
+                  </div>
+                  <Skeleton className="h-6 w-3/4 bg-gray-200" />
+                  <Skeleton className="h-20 w-full bg-gray-200" />
+                  <Skeleton className="h-16 w-full bg-gray-200" />
+                  <Skeleton className="h-28 w-5/6 bg-gray-200" />
                 </div>
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-28 w-full" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-32 w-5/6" />
-              </div>
-            )}
+              )}
 
-            {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ml-3 border-red-300"
-                  onClick={retry}
-                >
-                  Retry
-                </Button>
-              </div>
-            )}
-
-            {report && (
-              <>
-                {/* Two-sided verification note */}
-                {(issue.disputed ||
-                  issue.verification.coordinationSuspected ||
-                  issue.distinctCount < issue.count) && (
-                  <section
-                    aria-label="Verification layer notes"
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              {error && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+                  {error}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ml-3 border-red-300"
+                    onClick={retry}
                   >
-                    <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                      <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
-                      Verification layer
-                    </h4>
-                    <ul className="space-y-1 text-xs leading-relaxed text-slate-700">
-                      {issue.distinctCount < issue.count && (
-                        <li>
-                          • Rank uses <b>{issue.distinctCount} distinct citizens</b> of{' '}
-                          {issue.count} total reports — one citizen, one vote.
-                        </li>
-                      )}
-                      {issue.verification.coordinationSuspected && (
-                        <li className="text-amber-800">
-                          • Possible coordinated input —{' '}
-                          {issue.verification.templatedGroupSize} complaints share
-                          near-identical templated wording across different
-                          submitters. Volume treated with caution.
-                        </li>
-                      )}
-                      {issue.disputed && (
-                        <li className="font-medium text-red-700">
-                          • DISPUTED COMPLETION — {issue.disputeReason}
-                        </li>
-                      )}
-                    </ul>
-                  </section>
-                )}
+                    Retry
+                  </Button>
+                </div>
+              )}
 
-                {/* Executive summary */}
-                <section aria-label="Executive summary">
-                  <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                    <ScrollText className="h-3.5 w-3.5" aria-hidden />
-                    Executive summary
-                  </h4>
-                  <p className="text-sm leading-relaxed text-slate-800">
-                    {report.executiveSummary}
-                  </p>
-                </section>
+              {report && (
+                <div className="space-y-5 font-serif">
+                  {/* 1 — recap */}
+                  <header className="border-b border-gray-300 pb-3">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-gray-500">
+                      CitizenPulse · Department Action Memo ·{' '}
+                      {new Date(report.generatedAt).toLocaleDateString('en-IN')}
+                    </p>
+                    <h3 className="mt-1 text-base font-bold leading-snug">
+                      {issue.title}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-gray-600">
+                      📍 {issue.ward} · {issue.location} — {issue.count} reports from{' '}
+                      <b>{issue.distinctCount} distinct citizens</b>, urgency{' '}
+                      {issue.urgency}/5 · verified priority {issue.priority}
+                    </p>
+                  </header>
 
-                {/* Action plan */}
-                <section aria-label="Three point action plan">
-                  <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                    <ListChecks className="h-3.5 w-3.5" aria-hidden />
-                    3-point action plan
-                  </h4>
-                  <ol className="space-y-2">
-                    {report.actionPlan.map((a, i) => (
-                      <li key={i} className="flex items-start gap-2.5">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold text-white">
-                          {i + 1}
-                        </span>
-                        <p className="pt-0.5 text-sm leading-snug text-slate-800">{a}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-
-                {/* Budget */}
-                <section aria-label="Budget estimate">
-                  <h4 className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                    <BadgeIndianRupee className="h-3.5 w-3.5" aria-hidden />
-                    Budget estimate vs sanctioned funds
-                  </h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-lg border border-slate-200 bg-white p-2.5 text-center">
-                      <p className="text-[10px] font-semibold uppercase text-slate-400">
-                        Estimated cost
-                      </p>
-                      <p className="text-lg font-extrabold text-slate-900">
-                        {report.budgetEstimateLakh !== null
-                          ? `₹${report.budgetEstimateLakh}L`
-                          : '—'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-white p-2.5 text-center">
-                      <p className="text-[10px] font-semibold uppercase text-slate-400">
-                        Sanctioned
-                      </p>
-                      <p className="text-lg font-extrabold text-slate-900">
-                        {report.sanctionedLakh !== null ? `₹${report.sanctionedLakh}L` : '₹0L'}
-                      </p>
-                    </div>
-                    <div
-                      className={`rounded-lg border p-2.5 text-center ${
-                        report.shortfallLakh && report.shortfallLakh > 0
-                          ? 'border-red-200 bg-red-50'
-                          : 'border-emerald-200 bg-emerald-50'
-                      }`}
+                  {/* 2 — MPLADS fund status line */}
+                  {issue.disputed && mpl ? (
+                    <p
+                      className="rounded-md px-3 py-2 text-[13px] font-semibold"
+                      style={{ backgroundColor: '#B91C4A14', color: '#9F1239' }}
                     >
-                      <p className="text-[10px] font-semibold uppercase text-slate-400">
-                        {report.sanctionedLakh !== null ? 'Shortfall' : 'Needs fresh line'}
-                      </p>
-                      <p
-                        className={`text-lg font-extrabold ${
+                      🚩 DISPUTED COMPLETION — sanctioned ₹{mpl.amountLakh}L on{' '}
+                      {shortDate(mpl.sanctionDate)}, recorded complete{' '}
+                      {shortDate(mpl.completionDate!)} — but{' '}
+                      {issue.reportsSinceCompletion} reports since say otherwise.
+                      Physical verification recommended.
+                    </p>
+                  ) : mpl ? (
+                    <p className="rounded-md bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900 ring-1 ring-amber-200">
+                      ⚠️ Sanctioned ₹{mpl.amountLakh}L on {shortDate(mpl.sanctionDate)} —
+                      status: {mpl.status.toUpperCase()}
+                      {mpl.completionDate
+                        ? ` (completed ${shortDate(mpl.completionDate)})`
+                        : ''}{' '}
+                      · “{mpl.workName}” · {mpl.implementingAgency}
+                    </p>
+                  ) : (
+                    <p className="rounded-md bg-gray-100 px-3 py-2 text-[13px] font-medium text-gray-600">
+                      No sanctioned MPLADS work found — a fresh budget line is the
+                      correct ask.
+                    </p>
+                  )}
+
+                  {/* Verification layer note (paper-toned) */}
+                  {(issue.disputed ||
+                    issue.verification.coordinationSuspected ||
+                    issue.distinctCount < issue.count) && (
+                    <section
+                      aria-label="Verification layer notes"
+                      className="rounded-md border border-gray-300 bg-gray-50 p-3"
+                    >
+                      <h4 className="mb-1 font-mono text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                        🛡️ Verification layer
+                      </h4>
+                      <ul className="space-y-1 text-xs leading-relaxed text-gray-700">
+                        {issue.distinctCount < issue.count && (
+                          <li>
+                            • Rank uses <b>{issue.distinctCount} distinct citizens</b>{' '}
+                            of {issue.count} total reports — one citizen, one vote.
+                          </li>
+                        )}
+                        {issue.verification.coordinationSuspected && (
+                          <li className="text-amber-800">
+                            • Possible coordinated input —{' '}
+                            {
+                              issue.verification.templatedGroupSize
+                            }{' '}
+                            complaints share near-identical templated wording across
+                            different submitters. Cluster quarantined from ranking
+                            pending review.
+                          </li>
+                        )}
+                        {issue.disputed && (
+                          <li className="font-medium text-rose-800">
+                            • DISPUTED COMPLETION — {issue.disputeReason}
+                          </li>
+                        )}
+                      </ul>
+                    </section>
+                  )}
+
+                  {/* Executive summary */}
+                  <section aria-label="Executive summary">
+                    <h4 className="mb-1 font-mono text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                      Executive summary
+                    </h4>
+                    <p className="text-sm leading-relaxed">{report.executiveSummary}</p>
+                  </section>
+
+                  {/* 3 — estimated real cost NEXT TO sanctioned (one-glance gap) */}
+                  <section aria-label="Budget estimate">
+                    <h4 className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                      Budget — estimated real cost vs. sanctioned
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-lg border border-gray-300 bg-white p-2.5 text-center">
+                        <p className="font-mono text-[9px] font-semibold uppercase text-gray-500">
+                          Estimated real cost
+                        </p>
+                        <p className="text-lg font-extrabold text-gray-900">
+                          {report.budgetEstimateLakh !== null
+                            ? `₹${report.budgetEstimateLakh}L`
+                            : '—'}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-gray-300 bg-white p-2.5 text-center">
+                        <p className="font-mono text-[9px] font-semibold uppercase text-gray-500">
+                          Sanctioned
+                        </p>
+                        <p className="text-lg font-extrabold text-gray-900">
+                          {report.sanctionedLakh !== null ? `₹${report.sanctionedLakh}L` : '₹0L'}
+                        </p>
+                      </div>
+                      <div
+                        className={`rounded-lg border p-2.5 text-center ${
                           report.shortfallLakh && report.shortfallLakh > 0
-                            ? 'text-red-700'
-                            : 'text-emerald-700'
+                            ? 'border-red-300 bg-red-50'
+                            : 'border-emerald-300 bg-emerald-50'
                         }`}
                       >
-                        {report.sanctionedLakh !== null
-                          ? report.shortfallLakh && report.shortfallLakh > 0
-                            ? `₹${report.shortfallLakh}L`
-                            : 'Covered'
-                          : `₹${report.budgetEstimateLakh ?? '—'}L`
-                        }
+                        <p className="font-mono text-[9px] font-semibold uppercase text-gray-500">
+                          {report.sanctionedLakh !== null ? 'Shortfall' : 'Needs fresh line'}
+                        </p>
+                        <p
+                          className={`text-lg font-extrabold ${
+                            report.shortfallLakh && report.shortfallLakh > 0
+                              ? 'text-red-700'
+                              : 'text-emerald-700'
+                          }`}
+                        >
+                          {report.sanctionedLakh !== null
+                            ? report.shortfallLakh && report.shortfallLakh > 0
+                              ? `₹${report.shortfallLakh}L`
+                              : 'Covered'
+                            : `₹${report.budgetEstimateLakh ?? '—'}L`}
+                        </p>
+                      </div>
+                    </div>
+                    {report.budgetReasoning && (
+                      <p className="mt-1.5 text-xs italic text-gray-500">
+                        {report.budgetReasoning}
                       </p>
-                    </div>
-                  </div>
-                  {report.budgetReasoning && (
-                    <p className="mt-1.5 text-xs italic text-slate-500">
-                      {report.budgetReasoning}
-                    </p>
-                  )}
-                  {report.shortfallLakh !== null && report.shortfallLakh > 0 && (
-                    <p className="mt-1.5 flex items-center gap-1.5 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      Already sanctioned {formatLakh(report.sanctionedLakh ?? 0)}, but estimated
-                      real cost is {formatLakh(report.budgetEstimateLakh ?? 0)} — shortfall of{' '}
-                      {formatLakh(report.shortfallLakh)} (cost escalation on delayed work).
-                    </p>
-                  )}
-                </section>
-
-                {/* RTI draft */}
-                {report.rtiApplicable && report.rtiApplication && (
-                  <section aria-label="RTI application draft">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                        <Gavel className="h-3.5 w-3.5" aria-hidden />
-                        Ready-to-send RTI application
-                      </h4>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1 border-slate-300 px-2 text-[11px] font-semibold"
-                        onClick={() => copy(report.rtiApplication, 'RTI application')}
-                      >
-                        <ClipboardCopy className="h-3 w-3" aria-hidden />
-                        Copy RTI
-                      </Button>
-                    </div>
-                    <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] leading-relaxed text-slate-700">
-                      {report.rtiApplication}
-                    </pre>
+                    )}
+                    {report.shortfallLakh !== null && report.shortfallLakh > 0 && (
+                      <p className="mt-1.5 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700">
+                        ⚠️ Sanctioned {formatLakh(report.sanctionedLakh ?? 0)}, but
+                        estimated real cost is {formatLakh(report.budgetEstimateLakh ?? 0)}{' '}
+                        — shortfall of {formatLakh(report.shortfallLakh)} (cost
+                        escalation on delayed work).
+                      </p>
+                    )}
                   </section>
-                )}
 
-                {report.rtiApplicable && !report.rtiApplication && (
-                  <p className="text-xs text-slate-400">
-                    RTI draft unavailable — regenerate the report.
-                  </p>
-                )}
+                  {/* 4 — action plan (what staff act on) */}
+                  <section aria-label="Three point action plan">
+                    <h4 className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                      Action plan — assign today
+                    </h4>
+                    <ol className="space-y-2">
+                      {report.actionPlan.map((a, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 font-mono text-xs font-bold text-white">
+                            {i + 1}
+                          </span>
+                          <p className="pt-0.5 text-sm font-semibold leading-snug">
+                            {a}
+                          </p>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
 
-                {!report.rtiApplicable && (
-                  <p className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-medium text-slate-500">
-                    <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    No sanctioned MPLADS work found for this issue — an RTI on fund status is not
-                    applicable. Budget line is the correct ask.
-                  </p>
-                )}
-              </>
-            )}
+                  {/* 5 — RTI draft (the sendable artifact) */}
+                  {report.rtiApplicable && report.rtiApplication && (
+                    <section aria-label="RTI application draft">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <h4 className="font-mono text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                          ⚖️ RTI application — ready to send
+                        </h4>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 border-gray-400 bg-white px-2 font-mono text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
+                          onClick={() => copy(report.rtiApplication, 'RTI application')}
+                        >
+                          <ClipboardCopy className="h-3 w-3" aria-hidden />
+                          Copy RTI
+                        </Button>
+                      </div>
+                      <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border-2 border-dashed border-gray-400 bg-gray-50 p-3 font-mono text-[11px] leading-relaxed text-gray-800">
+                        {report.rtiApplication}
+                      </pre>
+                    </section>
+                  )}
+
+                  {report.rtiApplicable && !report.rtiApplication && (
+                    <p className="text-xs text-gray-500">
+                      RTI draft unavailable — regenerate the report.
+                    </p>
+                  )}
+
+                  {!report.rtiApplicable && (
+                    <p className="rounded-md border border-gray-300 bg-gray-50 px-2.5 py-2 text-xs font-medium text-gray-500">
+                      No sanctioned MPLADS work found for this issue — an RTI on fund
+                      status is not applicable. Budget line is the correct ask.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </ScrollArea>
 
         {report && (
-          <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/70 px-5 py-3">
-            <p className="text-[10px] leading-tight text-slate-400">
+          <div className="flex items-center justify-between gap-3 border-t border-[#374151] bg-[#1F2937] px-5 py-3">
+            <p className="text-[10px] leading-tight text-gray-500">
               AI-assisted draft · verify facts before official submission.
               <br />
               MPLADS framing: MP recommends; district agency implements.
@@ -371,7 +404,7 @@ export function ReportDialog({ issue, onOpenChange }: ReportDialogProps) {
               size="sm"
               onClick={() => copy(reportToPlainText(report, issue), 'Full report')}
               className={`gap-1.5 font-semibold text-white ${
-                copied ? 'bg-emerald-600' : 'bg-slate-800 hover:bg-slate-900'
+                copied ? 'bg-emerald-600 hover:bg-emerald-600' : 'bg-white text-gray-900 hover:bg-gray-200'
               }`}
             >
               {copied ? (

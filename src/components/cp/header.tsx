@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Globe2, Radio, RotateCcw, Send } from 'lucide-react';
+import { Radio, RotateCcw, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -9,8 +9,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { ConstituencyMeta } from '@/lib/constituencies';
 
 interface HeaderProps {
+  constituency: ConstituencyMeta;
+  onSwitchConstituency: () => void;
   liveOn: boolean;
   onToggleLive: (on: boolean) => void;
   onSubmitClick: () => void;
@@ -22,6 +25,8 @@ interface HeaderProps {
 }
 
 export function Header({
+  constituency,
+  onSwitchConstituency,
   liveOn,
   onToggleLive,
   onSubmitClick,
@@ -32,40 +37,51 @@ export function Header({
   aiCount,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-40 border-b border-[#374151] bg-[#111827]/95 backdrop-blur supports-[backdrop-filter]:bg-[#111827]/85">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
-            <Activity className="h-5 w-5" aria-hidden />
-          </div>
+          <button
+            type="button"
+            onClick={onSwitchConstituency}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-600 text-lg font-black text-white shadow-sm transition-colors hover:bg-amber-500"
+            aria-label="Back to constituency search"
+            title="Back to constituency search"
+          >
+            CP
+          </button>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold leading-tight text-slate-900">
-              CitizenPulse
-            </h1>
-            <p className="truncate text-xs text-slate-500">
-              Constituency intelligence console · MP office staff
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <h1 className="truncate text-base font-bold leading-tight text-white">
+                {constituency.name}
+              </h1>
+              <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[10px] font-semibold text-gray-300">
+                {constituency.mpName} · {constituency.party}
+              </span>
+            </div>
+            <p className="truncate text-[11px] text-gray-500">
+              CitizenPulse · {constituency.city}, {constituency.state} ·{' '}
+              {totalComplaints} complaints → {totalIssues} issues · {aiCount} AI-classified live
             </p>
           </div>
         </div>
 
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-            {totalComplaints} complaints → {totalIssues} issues
-          </span>
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-            {aiCount} AI-classified live
-          </span>
-        </div>
-
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5">
+          <button
+            type="button"
+            onClick={onSwitchConstituency}
+            className="hidden rounded-full border border-[#374151] bg-[#1F2937] px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-amber-700 hover:text-amber-400 sm:block"
+          >
+            ← Constituencies
+          </button>
+
+          <div className="flex items-center gap-2 rounded-full border border-[#374151] bg-[#1F2937] px-3 py-1.5">
             <Radio
-              className={`h-4 w-4 ${liveOn ? 'animate-pulse text-red-600' : 'text-slate-400'}`}
+              className={`h-4 w-4 ${liveOn ? 'animate-pulse text-red-500' : 'text-gray-500'}`}
               aria-hidden
             />
             <label
               htmlFor="live-sim"
-              className="cursor-pointer select-none text-xs font-medium text-slate-700"
+              className="cursor-pointer select-none text-xs font-medium text-gray-300"
             >
               Live feed sim
             </label>
@@ -80,7 +96,7 @@ export function Header({
           <Button
             onClick={onSubmitClick}
             size="sm"
-            className="gap-1.5 bg-emerald-700 font-semibold text-white hover:bg-emerald-800"
+            className="gap-1.5 bg-amber-600 font-semibold text-white hover:bg-amber-500"
           >
             <Send className="h-4 w-4" aria-hidden />
             <span className="hidden sm:inline">Submit complaint</span>
@@ -95,9 +111,9 @@ export function Header({
                   size="icon"
                   variant="outline"
                   aria-label="Open infrastructure roadmap"
-                  className="h-9 w-9 border-slate-300"
+                  className="h-9 w-9 border-[#374151] bg-[#1F2937] text-gray-400 hover:bg-[#374151] hover:text-white"
                 >
-                  <Globe2 className="h-4 w-4" aria-hidden />
+                  🛰️
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Open infrastructure roadmap</TooltipContent>
@@ -109,12 +125,12 @@ export function Header({
                   size="icon"
                   variant="outline"
                   aria-label="Reset demo to seeded state"
-                  className="h-9 w-9 border-slate-300"
+                  className="h-9 w-9 border-[#374151] bg-[#1F2937] text-gray-400 hover:bg-[#374151] hover:text-white"
                 >
                   <RotateCcw className="h-4 w-4" aria-hidden />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Reset demo</TooltipContent>
+              <TooltipContent side="bottom">Reset this constituency&apos;s demo</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

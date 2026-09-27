@@ -14,10 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CitizenPulse — Constituency Intelligence",
+  title: "CitizenPulse — Constituency Intelligence (Maharashtra Pilot)",
   description:
-    "CitizenPulse turns multilingual citizen complaints into one ranked, de-duplicated issue list — cross-checked against MPLADS fund records with action plans, budget estimates and ready-to-send RTI drafts.",
-  keywords: ["CitizenPulse", "MP office", "MPLADS", "grievance intelligence", "DPI", "governance"],
+    "CitizenPulse turns multilingual citizen complaints into one ranked, de-duplicated issue list — cross-checked against MPLADS fund records with action plans, budget estimates and ready-to-send RTI drafts. Piloting Nagpur & Mumbai North.",
+  keywords: ["CitizenPulse", "MP office", "MPLADS", "grievance intelligence", "DPI", "governance", "Nagpur", "Mumbai"],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },

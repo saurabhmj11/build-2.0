@@ -3,15 +3,16 @@ import { getDashboardState, registerComplaint, NewComplaintResult } from './stor
 import { Complaint } from './types';
 
 /**
- * Full pipeline for a NEW incoming complaint:
+ * Full pipeline for a NEW incoming complaint (constituency-scoped):
  * LLM classify + cluster-match (with rule-based fallback) → register in store.
  */
 export async function processIncomingComplaint(
+  constituencyId: string,
   text: string,
   source: Complaint['source'],
   submittedBy: string,
 ): Promise<NewComplaintResult> {
-  const state = getDashboardState();
+  const state = getDashboardState(constituencyId);
   const issuesForMatch = state.issues.map((i) => ({
     id: i.id,
     title: i.title,
@@ -21,7 +22,7 @@ export async function processIncomingComplaint(
 
   const result = await classifyAndMatch(text, issuesForMatch);
 
-  return registerComplaint({
+  return registerComplaint(constituencyId, {
     textOriginal: text,
     language: result.language,
     translationEn: result.translationEn,

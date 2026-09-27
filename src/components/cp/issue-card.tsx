@@ -1,18 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  AlertTriangle,
-  ChevronDown,
-  Copy,
-  FileText,
-  FileWarning,
-  MapPin,
-  ShieldAlert,
-  ShieldCheck,
-  Users,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Collapsible,
@@ -22,7 +11,11 @@ import {
 import { Complaint, IssueView } from '@/lib/types';
 import {
   CATEGORY_STYLE,
-  SOURCE_ICON,
+  DISPUTED_HEX,
+  maskSubmitterId,
+  MPLADS_STATUS_LABEL,
+  shortDate,
+  SOURCE_EMOJI,
   timeAgo,
   urgencyStyle,
 } from '@/lib/client-format';
@@ -35,19 +28,23 @@ interface IssueCardProps {
   onGenerateReport: (issue: IssueView) => void;
 }
 
-function CountBadge({ count, distinct }: { count: number; distinct: number }) {
+function CountHero({ count, distinct }: { count: number; distinct: number }) {
   // key remount replays the pop animation when the cluster genuinely grows
-  const genuine = distinct;
   return (
     <span
-      key={genuine}
-      className="cp-count-pop inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-bold text-white shadow-sm"
+      key={distinct}
+      className="cp-count-pop inline-flex items-baseline gap-1.5"
     >
-      <Users className="h-3.5 w-3.5" aria-hidden />
-      {genuine} {genuine === 1 ? 'distinct citizen' : 'distinct citizens'} reported
-      {count > distinct && (
-        <span className="font-semibold opacity-80">· {count} reports</span>
-      )}
+      <span className="text-2xl font-extrabold leading-none text-white">
+        {count}
+      </span>
+      <span className="text-xs font-semibold text-gray-400">
+        {count === 1 ? 'report' : 'reports'}
+      </span>
+      <span className="text-xs text-gray-500">
+        · from <b className="text-gray-300">{distinct}</b> distinct{' '}
+        {distinct === 1 ? 'citizen' : 'citizens'}
+      </span>
     </span>
   );
 }
@@ -65,74 +62,92 @@ export function IssueCard({
   const mpl = issue.mplads;
   const isTop = rank === 1;
   const deWeighted = issue.rawPriority > issue.priority;
-
   const pct = maxPriority > 0 ? Math.round((issue.priority / maxPriority) * 100) : 0;
 
   return (
     <article
-      className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md ${
-        isTop ? 'border-emerald-300' : 'border-slate-200'
-      }`}
+      className={`overflow-hidden rounded-xl border bg-[#1F2937] transition-colors ${
+        isTop ? 'border-gray-500' : 'border-[#374151]'
+      } hover:border-gray-500`}
     >
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
-        {/* Rank + priority */}
-        <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:gap-1">
+        {/* 1 — urgency color bar + rank (left edge) */}
+        <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:gap-1.5">
           <span
-            className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-extrabold ${
-              isTop ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-500'
-            }`}
-            aria-label={`Rank ${rank}`}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-extrabold"
+            style={{
+              backgroundColor: `${urg.hex}22`,
+              color: urg.hex,
+              boxShadow: `inset 0 0 0 1.5px ${urg.hex}`,
+            }}
+            aria-label={`Rank ${rank} · urgency ${issue.urgency} of 5`}
           >
             #{rank}
           </span>
           <div className="sm:text-center">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">
               Priority
             </p>
-            <p className="text-lg font-extrabold leading-none text-slate-800">
+            <p className="text-lg font-extrabold leading-none text-white">
               {issue.priority}
             </p>
           </div>
         </div>
 
-        {/* Body */}
+        {/* 2–5 — title, hero count, pills, location */}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-bold leading-snug text-slate-900">
-              {issue.title}
-            </h3>
+          <h3 className="text-[15px] font-bold leading-snug text-white">
+            {issue.title}
+          </h3>
+
+          <div className="mt-1.5">
+            <CountHero count={issue.count} distinct={issue.distinctCount} />
           </div>
 
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-            <MapPin className="h-3 w-3 shrink-0" aria-hidden />
-            {issue.ward} · {issue.location}
-          </p>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <CountBadge count={issue.count} distinct={issue.distinctCount} />
-            {issue.recentCount > 0 && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                +{issue.recentCount} in last hour
-              </span>
-            )}
-            <Badge
-              variant="outline"
-              className={`px-1.5 py-0 text-[10px] font-semibold ${CATEGORY_STYLE[issue.category]}`}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${CATEGORY_STYLE[issue.category]}`}
             >
               {issue.category}
-            </Badge>
+            </span>
             <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${urg.cls}`}
+              className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+              style={{ backgroundColor: urg.hex }}
               title={`Urgency ${issue.urgency}/5`}
             >
               Urgency {issue.urgency} · {urg.label}
             </span>
+            {issue.recentCount > 0 && (
+              <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[10px] font-bold text-amber-400">
+                +{issue.recentCount} in last hour
+              </span>
+            )}
+            {deWeighted && (
+              <span
+                className="rounded-full border border-amber-700/70 bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-400"
+                title="Raw volume would have scored this higher — the verification layer de-weighted it"
+              >
+                raw {issue.rawPriority} → verified {issue.priority}
+              </span>
+            )}
+            {issue.quarantined && (
+              <span
+                className="rounded-full border border-amber-600 bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-300"
+                title="Suspected coordinated campaign — ranking quarantined pending human review"
+              >
+                📋 quarantined — rank capped at urgency
+              </span>
+            )}
           </div>
 
-          {/* Priority bar */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <p className="mt-1.5 text-xs text-gray-500">
+            📍 {issue.ward} · {issue.location}
+          </p>
+
+          {/* priority bar */}
+          <div className="mt-2 flex items-center gap-2">
             <div
-              className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-slate-100"
+              className="h-1 min-w-20 flex-1 overflow-hidden rounded-full bg-[#374151]"
               role="progressbar"
               aria-valuenow={issue.priority}
               aria-valuemin={0}
@@ -140,109 +155,107 @@ export function IssueCard({
               aria-label="Verified priority score relative to top issue"
             >
               <div
-                className={`h-full rounded-full ${isTop ? 'bg-emerald-600' : 'bg-slate-400'}`}
-                style={{ width: `${Math.max(6, pct)}%` }}
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(6, pct)}%`,
+                  backgroundColor: urg.hex,
+                }}
               />
             </div>
-            <span className="shrink-0 text-[10px] font-medium text-slate-400">
-              {issue.distinctCount} distinct × urgency {issue.urgency}
+            <span className="shrink-0 text-[10px] font-medium text-gray-500">
+              {issue.quarantined ? 'urgency only' : `${issue.distinctCount} distinct`} ×
+              urgency {issue.urgency}
             </span>
-            {deWeighted && (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800"
-                title="Raw volume would have scored this higher — the verification layer de-weighted it"
-              >
-                <ShieldAlert className="h-3 w-3" aria-hidden />
-                raw {issue.rawPriority} → verified {issue.priority}
-              </span>
-            )}
           </div>
 
-          {/* Module 4b — disputed official completion record */}
+          {/* 6 — MPLADS strip: disputed OR sanctioned OR clean-completed OR none.
+              A card is either "disputed" or "sanctioned/ongoing/delayed", never both. */}
           {issue.disputed && mpl ? (
-            <div className="mt-3 rounded-lg border-2 border-red-300 bg-red-50 p-2.5 text-xs leading-relaxed">
-              <p className="flex items-start gap-1.5 font-bold text-red-800">
-                <FileWarning className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                DISPUTED COMPLETION — work recorded completed, ground reports
-                continue
+            <div
+              className="mt-3 rounded-lg p-2.5 text-xs leading-relaxed"
+              style={{
+                backgroundColor: `${DISPUTED_HEX}1f`,
+                boxShadow: `inset 0 0 0 1.5px ${DISPUTED_HEX}`,
+              }}
+            >
+              <p className="font-bold" style={{ color: '#f472a0' }}>
+                🚩 DISPUTED — marked complete on {shortDate(mpl.completionDate!)},
+                but {issue.reportsSinceCompletion}{' '}
+                {issue.reportsSinceCompletion === 1 ? 'report' : 'reports'} since say
+                otherwise
               </p>
-              <p className="mt-1 pl-5.5 font-semibold text-slate-800">
-                Already sanctioned ₹{mpl.amountLakh}L on {mpl.sanctionDate},
-                officially completed {mpl.completionDate} — yet {issue.count}{' '}
-                complaints about the same problem post-date the completion.
+              <p className="mt-1 text-gray-300">
+                Sanctioned ₹{mpl.amountLakh}L on {shortDate(mpl.sanctionDate)} · “
+                {mpl.workName}” · {mpl.implementingAgency}
               </p>
-              <p className="mt-0.5 pl-5.5 text-slate-600">
-                “{mpl.workName}” · {mpl.implementingAgency}
-              </p>
-              <p className="mt-0.5 pl-5.5 font-medium text-red-700">
-                → Objective mismatch between official record and ground reports
-                — physical verification recommended. Not hidden as “resolved”.
+              <p className="mt-0.5 font-medium" style={{ color: '#f472a0' }}>
+                → Official record vs. ground reports mismatch — physical
+                verification recommended. Not hidden as “resolved”.
               </p>
             </div>
           ) : mpl ? (
             <div
-              className={`mt-3 rounded-lg border p-2.5 text-xs leading-relaxed ${
-                mpl.status === 'Delayed'
-                  ? 'border-red-200 bg-red-50'
-                  : 'border-amber-200 bg-amber-50/70'
+              className={`mt-3 rounded-lg border border-dashed p-2.5 text-xs leading-relaxed ${
+                mpl.status === 'Completed'
+                  ? 'border-emerald-700/70 bg-emerald-950/25'
+                  : 'border-amber-700/80 bg-amber-950/20'
               }`}
             >
-              <p className="flex items-start gap-1.5 font-semibold text-slate-800">
-                <AlertTriangle
-                  className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
-                    mpl.status === 'Delayed' ? 'text-red-600' : 'text-amber-600'
-                  }`}
-                  aria-hidden
-                />
-                Already sanctioned ₹{mpl.amountLakh}L on {mpl.sanctionDate} —
-                status: <span className="whitespace-nowrap">{mpl.status}</span>
+              <p
+                className={`flex flex-wrap items-baseline gap-x-1 font-bold ${
+                  mpl.status === 'Completed' ? 'text-emerald-400' : 'text-amber-400'
+                }`}
+              >
+                {mpl.status === 'Completed' ? '✓' : '⚠️'}{' '}
+                {mpl.status === 'Completed'
+                  ? `Completed on ${shortDate(mpl.completionDate!)} — no reports since`
+                  : `Already sanctioned ₹${mpl.amountLakh}L on ${shortDate(mpl.sanctionDate)} — status: ${MPLADS_STATUS_LABEL[mpl.status]}`}
               </p>
-              <p className="mt-0.5 pl-5 text-slate-600">
+              <p className="mt-1 text-gray-400">
                 “{mpl.workName}” · {mpl.implementingAgency}
               </p>
-              <p className="mt-0.5 pl-5 font-medium text-slate-700">
+              <p className="mt-0.5 font-medium text-gray-300">
                 {mpl.status === 'Delayed'
                   ? '→ Unfulfilled sanctioned work: needs follow-up, not new budget.'
                   : mpl.status === 'Completed'
-                    ? '→ Work marked completed; monitoring complaint trend for dispute flags.'
-                    : '→ Ongoing sanctioned work: verify progress on the ground.'}
+                    ? '→ Completion consistent with ground reports — verified clean.'
+                    : mpl.status === 'Ongoing'
+                      ? '→ Ongoing sanctioned work: verify progress on the ground.'
+                      : '→ Sanctioned but not started: ask why work orders are pending.'}
               </p>
             </div>
           ) : (
-            <p className="mt-3 flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium text-slate-500">
-              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+            <p className="mt-3 rounded-lg border border-[#374151] bg-[#111827]/60 p-2.5 text-xs font-medium text-gray-500">
               No sanctioned MPLADS work on record — treat as a fresh, unfunded issue.
             </p>
           )}
 
           {/* Module 4a — coordinated-campaign flag */}
           {v.coordinationSuspected && (
-            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs leading-relaxed">
-              <p className="flex items-start gap-1.5 font-bold text-amber-900">
-                <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                Possible coordinated campaign — {v.templatedGroupSize} of{' '}
+            <div className="mt-2 rounded-lg border border-amber-700/70 bg-amber-950/30 p-2.5 text-xs leading-relaxed">
+              <p className="font-bold text-amber-300">
+                ⚠️ Suspected coordinated campaign — {v.templatedGroupSize} of{' '}
                 {issue.count} complaints share near-identical templated wording
-                across different submitters ({v.templatedGroupSubmitters.join(', ')})
-                within a short window.
+                across different phone ids ({v.templatedGroupSubmitters.join(', ')}
+                ) within a short window.
               </p>
-              <p className="mt-0.5 pl-5 text-amber-800">
+              <p className="mt-0.5 text-amber-200/80">
                 → Different check from duplicate clustering: these are{' '}
                 <span className="font-semibold">suspiciously identical</span>{' '}
-                texts, not different people describing the same problem. Ranking
-                uses {issue.distinctCount} distinct citizens only.
+                texts, not different people describing the same problem.
+                Quarantined from ranking pending human review.
               </p>
             </div>
           )}
 
           {/* Module 4a — repeat submitters note */}
           {v.duplicateSubmitters.length > 0 && (
-            <p className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-600">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-              Repeat submitters (de-weighted, one citizen one vote):
+            <p className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-[#374151] bg-[#111827]/60 px-2.5 py-1.5 text-[11px] font-medium text-gray-400">
+              Repeat submitters (de-weighted — one citizen, one vote):
               {v.duplicateSubmitters.map((d) => (
                 <span
                   key={d.name}
-                  className="rounded-full bg-white px-1.5 py-0.5 font-semibold text-slate-700 shadow-sm"
+                  className="rounded-full bg-[#374151] px-1.5 py-0.5 font-semibold text-gray-200"
                 >
                   {d.name} ×{d.times}
                 </span>
@@ -251,14 +264,21 @@ export function IssueCard({
           )}
         </div>
 
-        {/* Actions */}
+        {/* 7 — actions */}
         <div className="flex shrink-0 flex-row gap-2 sm:flex-col">
+          <Button
+            size="sm"
+            onClick={() => onGenerateReport(issue)}
+            className="h-8 gap-1.5 bg-amber-600 px-2.5 text-xs font-semibold text-white hover:bg-amber-500"
+          >
+            🏛️ Generate report
+          </Button>
           <Collapsible open={open} onOpenChange={setOpen}>
             <CollapsibleTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1 border-slate-300 px-2.5 text-xs font-semibold text-slate-600"
+                className="h-8 gap-1 border-[#374151] bg-transparent px-2.5 text-xs font-semibold text-gray-400 hover:bg-[#374151] hover:text-white"
               >
                 {issue.count} complaints
                 <ChevronDown
@@ -268,38 +288,33 @@ export function IssueCard({
               </Button>
             </CollapsibleTrigger>
           </Collapsible>
-          <Button
-            size="sm"
-            onClick={() => onGenerateReport(issue)}
-            className="h-8 gap-1.5 bg-emerald-700 px-2.5 text-xs font-semibold text-white hover:bg-emerald-800"
-          >
-            <FileText className="h-3.5 w-3.5" aria-hidden />
-            Generate report
-          </Button>
         </div>
       </div>
 
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleContent>
-          <div className="max-h-72 space-y-2 overflow-y-auto border-t border-slate-100 bg-slate-50/50 px-4 py-3">
-            {complaints.map((c) => {
-              const Icon = SOURCE_ICON[c.source] ?? SOURCE_ICON.App;
-              return (
-                <div key={c.id} className="rounded-lg border border-slate-200 bg-white p-2.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
-                    <span className="flex items-center gap-1.5 font-medium text-slate-600">
-                      <Icon className="h-3 w-3" aria-hidden />
-                      {c.submittedBy} · {c.ward} · {c.language}
-                    </span>
-                    <time dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
-                  </div>
-                  <p className="mt-1 text-[13px] leading-snug text-slate-800">{c.textOriginal}</p>
-                  <p className="mt-0.5 text-xs italic leading-snug text-slate-500">
-                    {c.translationEn}
-                  </p>
+          <div className="max-h-72 space-y-2 overflow-y-auto border-t border-[#374151] bg-[#111827]/50 px-4 py-3">
+            {complaints.map((c) => (
+              <div key={c.id} className="rounded-lg border border-[#374151] bg-[#1F2937] p-2.5">
+                <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                  <span className="flex items-center gap-1.5 font-medium text-gray-400">
+                    <span aria-hidden>{SOURCE_EMOJI[c.source] ?? '📱'}</span>
+                    {c.submittedBy}{' '}
+                    <span className="font-mono text-gray-600">
+                      ({maskSubmitterId(c.submitterId)})
+                    </span>{' '}
+                    · {c.ward} · {c.language}
+                  </span>
+                  <time dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
                 </div>
-              );
-            })}
+                <p className="mt-1 text-[13px] leading-snug text-gray-200">
+                  {c.textOriginal}
+                </p>
+                <p className="mt-0.5 text-xs italic leading-snug text-gray-500">
+                  {c.translationEn}
+                </p>
+              </div>
+            ))}
           </div>
         </CollapsibleContent>
       </Collapsible>

@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownUp, Inbox, ListFilter } from 'lucide-react';
 import { Header } from '@/components/cp/header';
+import { EntryScreen } from '@/components/cp/entry-screen';
 import { FundStrip } from '@/components/cp/fund-strip';
 import { VerificationStrip } from '@/components/cp/verification-strip';
 import { WardMap } from '@/components/cp/ward-map';
@@ -15,9 +15,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { CATEGORIES } from '@/lib/types';
 import { Category, DashboardState, IssueView } from '@/lib/types';
+import {
+  CONSTITUENCIES,
+  isLiveConstituency,
+} from '@/lib/constituencies';
 
 export default function Home() {
   const { toast } = useToast();
+  // Entry screen → dashboard is the ONLY navigation step (DESIGN.md)
+  const [constituencyId, setConstituencyId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [state, setState] = useState<DashboardState | null>(null);
   const [liveOn, setLiveOn] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -29,34 +36,61 @@ export default function Home() {
   const [wardFilter, setWardFilter] = useState<string | null>(null);
   const processingRef = useRef(false);
 
+  // Restore deep link (?c=nagpur) on mount
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('c');
+    if (isLiveConstituency(c)) selectConstituency(c);
+    setHydrated(true);
+  }, []);
+
+  const selectConstituency = useCallback((id: string) => {
+    setConstituencyId(id);
+    setState(null);
+    setLiveOn(false);
+    setCategoryFilter('All');
+    setWardFilter(null);
+    setReportOpen(false);
+    setReportIssue(null);
+    window.history.replaceState(null, '', `/?c=${id}`);
+  }, []);
+
+  const backToEntry = useCallback(() => {
+    setConstituencyId(null);
+    setState(null);
+    setLiveOn(false);
+    window.history.replaceState(null, '', '/');
+  }, []);
+
   const setProcessingBoth = useCallback((v: boolean) => {
     processingRef.current = v;
     setProcessing(v);
   }, []);
 
-  // Initial load
+  // Load + background refresh for the ACTIVE constituency
   useEffect(() => {
-    fetch('/api/state')
-      .then((r) => r.json())
-      .then((d: DashboardState) => setState(d))
-      .catch(() => toast({ title: 'Failed to load dashboard' }));
-  }, []);
-
-  // Background refresh (cheap — in-memory store)
-  useEffect(() => {
+    if (!constituencyId) return;
+    let cancelled = false;
+    const load = () =>
+      fetch(`/api/state?c=${constituencyId}`)
+        .then((r) => r.json())
+        .then((d: DashboardState) => {
+          if (!cancelled) setState(d);
+        })
+        .catch(() => undefined);
+    load();
     const iv = setInterval(() => {
       if (document.hidden || processingRef.current) return;
-      fetch('/api/state')
-        .then((r) => r.json())
-        .then((d: DashboardState) => setState(d))
-        .catch(() => undefined);
+      load();
     }, 6000);
-    return () => clearInterval(iv);
-  }, []);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [constituencyId]);
 
-  // Live feed simulation — client-paced
+  // Live feed simulation — client-paced, constituency-scoped
   useEffect(() => {
-    if (!liveOn) return;
+    if (!liveOn || !constituencyId) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -68,7 +102,11 @@ export default function Home() {
       }
       setProcessingBoth(true);
       try {
-        const res = await fetch('/api/demo/next', { method: 'POST' });
+        const res = await fetch('/api/demo/next', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ constituencyId }),
+        });
         const data = await res.json();
         if (data.ok && data.state) {
           setState(data.state as DashboardState);
@@ -83,7 +121,9 @@ export default function Home() {
           } else if (issue) {
             toast({
               title: `Clustered — "${issue.title}"`,
-              description: `${issue.count} citizens have now reported this · priority ${issue.priority} · watch the rank move up`,
+              description: `${issue.count} reports · ${issue.distinctCount} distinct citizens · priority ${issue.priority}${
+                issue.quarantined ? ' (quarantined)' : ''
+              }`,
             });
           }
         } else if (data.exhausted) {
@@ -107,7 +147,7 @@ export default function Home() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [liveOn, setProcessingBoth, toast]);
+  }, [liveOn, constituencyId, setProcessingBoth, toast]);
 
   const complaintsByIssue = useMemo(() => {
     const map = new Map<string, DashboardState['complaints']>();
@@ -120,24 +160,34 @@ export default function Home() {
   }, [state]);
 
   const handleReset = useCallback(async () => {
+    if (!constituencyId) return;
     setLiveOn(false);
     try {
-      const res = await fetch('/api/demo/reset', { method: 'POST' });
+      const res = await fetch('/api/demo/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ constituencyId }),
+      });
       const data = await res.json();
       if (data.ok) {
         setState(data.state as DashboardState);
-        toast({ title: 'Demo reset', description: 'Back to the seeded intake of 24 complaints.' });
+        toast({
+          title: 'Demo reset',
+          description: 'Back to the seeded intake for this constituency.',
+        });
       }
     } catch {
       toast({ title: 'Reset failed' });
     }
-  }, [toast]);
+  }, [constituencyId, toast]);
 
   const handleSubmitted = useCallback(
     (newState: DashboardState, summary: string, isNewIssue: boolean) => {
       setState(newState);
       toast({
-        title: isNewIssue ? 'Complaint registered — new issue opened' : 'Complaint registered — merged into existing issue',
+        title: isNewIssue
+          ? 'Complaint registered — new issue opened'
+          : 'Complaint registered — merged into existing issue',
         description: summary,
       });
     },
@@ -170,9 +220,26 @@ export default function Home() {
 
   const maxPriority = state?.issues[0]?.priority ?? 1;
 
+  // ── Entry screen (before the dashboard) ─────────────────────────────────
+  if (!constituencyId) {
+    return hydrated ? (
+      <EntryScreen constituencies={CONSTITUENCIES} onSelect={selectConstituency} />
+    ) : (
+      <div className="flex min-h-screen items-center justify-center bg-[#111827]">
+        <Skeleton className="h-8 w-48 bg-[#1F2937]" />
+      </div>
+    );
+  }
+
+  // ── Dashboard ────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-[#111827]">
       <Header
+        constituency={state?.constituency ?? {
+          id: constituencyId, name: constituencyId, city: '', state: 'Maharashtra',
+          mpName: '…', party: '…',
+        }}
+        onSwitchConstituency={backToEntry}
         liveOn={liveOn}
         onToggleLive={setLiveOn}
         onSubmitClick={() => setSubmitOpen(true)}
@@ -183,30 +250,23 @@ export default function Home() {
         aiCount={state?.aiClassifiedCount ?? 0}
       />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:py-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-4">
         {!state ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-20 rounded-xl" />
-              ))}
-            </div>
+            <Skeleton className="h-9 w-full bg-[#1F2937]" />
+            <Skeleton className="h-9 w-full bg-[#1F2937]" />
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(330px,390px)_1fr]">
-              <Skeleton className="h-[480px] rounded-xl" />
+              <Skeleton className="h-[480px] bg-[#1F2937]" />
               <div className="space-y-4">
                 {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-40 rounded-xl" />
+                  <Skeleton key={i} className="h-40 bg-[#1F2937]" />
                 ))}
               </div>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-5">
-            <FundStrip
-              fund={state.fundSummary}
-              totalComplaints={state.totalComplaints}
-              totalIssues={state.issues.length}
-            />
+          <div className="flex flex-col gap-4">
+            {/* Module 4 status — one thin dark bar */}
             <VerificationStrip summary={state.verificationSummary} />
 
             <WardMap
@@ -216,26 +276,29 @@ export default function Home() {
             />
 
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(330px,390px)_1fr]">
+              {/* Left column — the chaos */}
               <LiveFeed complaints={state.complaints.slice(0, 40)} processing={processing} />
 
+              {/* Right column — the signal */}
               <section aria-label="Ranked priority issues" className="flex flex-col gap-3">
+                {/* Fund summary strip — thin context line above the cards (DESIGN.md) */}
+                <FundStrip fund={state.fundSummary} />
+
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-                  <h2 className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                    <ListFilter className="h-4 w-4 text-slate-500" aria-hidden />
-                    Ranked issues
+                  <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+                    📊 Priority dashboard
                   </h2>
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                    <ArrowDownUp className="h-3 w-3" aria-hidden />
+                  <p className="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
                     sorted by distinct citizens × urgency — one citizen, one vote
                     {state.livePoolRemaining > 0 && (
-                      <span className="ml-1 rounded-full bg-white px-2 py-0.5 font-semibold text-slate-500 shadow-sm">
+                      <span className="ml-1 rounded-full bg-[#1F2937] px-2 py-0.5 font-semibold text-gray-400 ring-1 ring-[#374151]">
                         {state.livePoolRemaining} in sim queue
                       </span>
                     )}
                   </p>
                 </div>
 
-                {/* Department filter tabs (ARCHITECTURE.md UI layer) */}
+                {/* Department filter tabs — filter BOTH columns */}
                 <div
                   className="flex items-center gap-1.5 overflow-x-auto pb-0.5"
                   role="tablist"
@@ -256,14 +319,12 @@ export default function Home() {
                         onClick={() => setCategoryFilter(cat)}
                         className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                           isActive
-                            ? 'bg-slate-900 text-white shadow-sm'
-                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                            ? 'bg-white text-gray-900'
+                            : 'border border-[#374151] bg-[#1F2937] text-gray-400 hover:border-gray-500 hover:text-white'
                         }`}
                       >
                         {cat}
-                        <span
-                          className={`ml-1 ${isActive ? 'text-emerald-300' : 'text-slate-400'}`}
-                        >
+                        <span className={`ml-1 ${isActive ? 'text-amber-600' : 'text-gray-600'}`}>
                           {count}
                         </span>
                       </button>
@@ -273,7 +334,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setWardFilter(null)}
-                      className="ml-1 shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100"
+                      className="ml-1 shrink-0 rounded-full bg-amber-950/60 px-3 py-1.5 text-xs font-bold text-amber-400 ring-1 ring-amber-800 transition-colors hover:bg-amber-900/60"
                     >
                       {wardFilter} ✕
                     </button>
@@ -281,7 +342,7 @@ export default function Home() {
                 </div>
 
                 {visibleIssues.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+                  <p className="rounded-xl border border-dashed border-[#374151] bg-[#1F2937]/50 p-6 text-center text-sm text-gray-500">
                     No issues match this filter yet — try another department or clear
                     the ward filter.
                   </p>
@@ -298,13 +359,12 @@ export default function Home() {
                   />
                 ))}
 
-                <p className="flex items-center gap-1.5 px-1 text-[11px] text-slate-400">
-                  <Inbox className="h-3 w-3 shrink-0" aria-hidden />
-                  {state.totalComplaints} raw complaints collapsed into{' '}
+                <p className="px-1 text-[11px] leading-relaxed text-gray-600">
+                  📥 {state.totalComplaints} raw complaints collapsed into{' '}
                   {state.issues.length} actionable issues — {state.clusterSavings}{' '}
-                  duplicates merged by the AI cluster engine · every issue
-                  verified two-sided: citizen input de-weighted for manipulation,
-                  official records checked against ground reports.
+                  duplicates merged by the AI cluster engine · every issue verified
+                  two-sided: citizen input de-weighted for manipulation, official
+                  records checked against ground reports.
                 </p>
               </section>
             </div>
@@ -312,21 +372,25 @@ export default function Home() {
         )}
       </main>
 
-      <footer className="mt-auto border-t border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-slate-400">
+      <footer className="mt-auto border-t border-[#374151]/60">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-[11px] text-gray-600">
           <span>
-            CitizenPulse — questions both directions: de-weights manipulated
-            citizen input, disputes unfulfilled official records. Not a
-            complaint tracker — a closed-loop truth engine.
+            CitizenPulse — questions both directions: de-weights manipulated citizen
+            input, disputes unfulfilled official records. Not a complaint tracker — a
+            closed-loop truth engine.
           </span>
-          <span>Track 1: AI for Digital Public Infrastructure &amp; Governance · MVP demo</span>
+          <span>
+            Maharashtra pilot · Nagpur &amp; Mumbai North · Track 1: DPI &amp;
+            Governance
+          </span>
         </div>
       </footer>
 
-      {reportOpen && liveReportIssue && (
+      {reportOpen && liveReportIssue && constituencyId && (
         <ReportDialog
           key={liveReportIssue.id}
           issue={liveReportIssue}
+          constituencyId={constituencyId}
           onOpenChange={(o) => {
             if (!o) {
               setReportOpen(false);
@@ -335,7 +399,12 @@ export default function Home() {
           }}
         />
       )}
-      <SubmitDialog open={submitOpen} onOpenChange={setSubmitOpen} onSubmitted={handleSubmitted} />
+      <SubmitDialog
+        open={submitOpen}
+        constituencyId={constituencyId}
+        onOpenChange={setSubmitOpen}
+        onSubmitted={handleSubmitted}
+      />
       <InfraDialog open={infraOpen} onOpenChange={setInfraOpen} />
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Loader2, Mic, Phone, Send, Sparkles, Square } from 'lucide-react';
+import { Loader2, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -65,27 +65,26 @@ function getSRCtor(): SRCtor | null {
 }
 
 const VOICE_LANGS: { code: string; label: string }[] = [
+  { code: 'mr-IN', label: 'मराठी' },
   { code: 'hi-IN', label: 'हिन्दी' },
   { code: 'en-IN', label: 'English' },
-  { code: 'ta-IN', label: 'தமிழ்' },
-  { code: 'bn-IN', label: 'বাংলা' },
-  { code: 'mr-IN', label: 'मराठी' },
 ];
 
 interface SubmitDialogProps {
   open: boolean;
+  constituencyId: string;
   onOpenChange: (open: boolean) => void;
   onSubmitted: (state: DashboardState, summary: string, isNewIssue: boolean) => void;
 }
 
 const SAMPLES: { label: string; text: string }[] = [
   {
-    label: 'Tamil sample',
-    text: 'வார்டு 4 பேருந்து நிறுத்தத்தில் மழைக்கால தண்ணீர் தேங்கி நிற்கிறது. மாணவர்கள் பள்ளிக்கு செல்லவே முடியவில்லை. டிரைன் அடைப்பு இல்லை.',
+    label: 'Marathi sample',
+    text: 'वॉर्ड ११ मधील पार्कमधील खेळण्याचे उपकरण तुटले आहेत. मुलांना दुखापती होत आहेत.',
   },
   {
     label: 'Hindi sample',
-    text: 'वार्ड 6 में सार्वजनिक शौचालय एक महीने से बंद पड़ा है, महिलाओं को बहुत परेशानी हो रही है। कृपया जल्दी कार्रवाई करें।',
+    text: 'वार्ड 6 में सार्वजनिक शौचालय एक महीने से बंद पड़ा है, महिलाओं को बहुत परेशानी हो रही है।',
   },
   {
     label: 'English sample',
@@ -93,14 +92,14 @@ const SAMPLES: { label: string; text: string }[] = [
   },
 ];
 
-export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogProps) {
+export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }: SubmitDialogProps) {
   const { toast } = useToast();
   const [text, setText] = useState('');
   const [name, setName] = useState('');
   const [channel, setChannel] = useState('WhatsApp');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
-  const [voiceLang, setVoiceLang] = useState('hi-IN');
+  const [voiceLang, setVoiceLang] = useState('mr-IN');
 
   const recognitionRef = useRef<SRLike | null>(null);
   const baseTextRef = useRef('');
@@ -172,7 +171,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
     if (!trimmed) {
       toast({
         title: 'Please describe the problem first',
-        description: 'Any language works — Hindi, Tamil, Bengali, English…',
+        description: 'Any language works — Marathi, Hindi, English…',
       });
       return;
     }
@@ -186,6 +185,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
           text: trimmed,
           submittedBy: name.trim() || 'Anonymous citizen',
           source: channel,
+          constituencyId,
         }),
       });
       const data = await res.json();
@@ -216,21 +216,21 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-lg overflow-y-auto sm:rounded-2xl">
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-lg overflow-y-auto border-[#374151] sm:rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-white">
             Submit a complaint
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+            <span className="rounded-full bg-amber-950/70 px-2 py-0.5 text-[10px] font-bold text-amber-400 ring-1 ring-amber-800">
               any language
             </span>
           </DialogTitle>
-          <DialogDescription className="text-xs leading-relaxed text-slate-500">
-            This runs the live AI pipeline: translation → category → urgency → ward extraction →
-            duplicate matching. Watch it land in the feed and cluster instantly.
+          <DialogDescription className="text-xs leading-relaxed text-gray-400">
+            This runs the live AI pipeline: translation → category → urgency → ward
+            extraction → duplicate matching. Watch it land in the feed and cluster
+            instantly.
           </DialogDescription>
-          <p className="flex items-start gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-500">
-            <Phone className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-            Production intake design: phone OTP verification + per-number rate
+          <p className="flex items-start gap-1.5 rounded-md border border-[#374151] bg-[#111827]/70 px-2.5 py-1.5 text-[11px] leading-snug text-gray-400">
+            📞 Production intake design: phone OTP verification + per-number rate
             limiting — keeps bots and repeat submitters out of the ranking
             (documented requirement; simulated in this demo).
           </p>
@@ -238,7 +238,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
 
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="complaint-text" className="text-xs font-semibold text-slate-600">
+            <Label htmlFor="complaint-text" className="text-xs font-semibold text-gray-300">
               Describe the problem
             </Label>
             <Textarea
@@ -246,8 +246,8 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
-              placeholder="बोलिए या लिखिए… / பேசுங்கள் அல்லது எழுதுங்கள்… / Speak or write in your own language…"
-              className={`text-sm ${listening ? 'border-red-300 ring-2 ring-red-100' : ''}`}
+              placeholder="बोला किंवा लिहा… / बोलिए या लिखिए… / Speak or write in your own language…"
+              className={`border-[#374151] bg-[#111827] text-sm text-white placeholder:text-gray-600 focus-visible:ring-amber-600/40 ${listening ? 'border-red-600 ring-2 ring-red-900/60' : ''}`}
               disabled={busy}
             />
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -257,7 +257,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
                   type="button"
                   onClick={() => setText(s.text)}
                   disabled={busy}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+                  className="rounded-full border border-[#374151] bg-[#111827] px-2.5 py-1 text-[11px] font-medium text-gray-400 transition-colors hover:border-amber-700 hover:text-amber-400 disabled:opacity-50"
                 >
                   Try {s.label}
                 </button>
@@ -267,7 +267,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
 
           {/* Voice input — browser-native Web Speech API (demo stopgap; production: AI4Bharat IndicConformer) */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+            <div className="flex items-center gap-1.5 rounded-lg border border-[#374151] bg-[#111827] px-2 py-1.5">
               <Button
                 type="button"
                 size="sm"
@@ -277,7 +277,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
                 className={`h-8 gap-1.5 px-2.5 text-xs font-semibold ${
                   listening
                     ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                    : 'border border-[#4B5563] bg-[#1F2937] text-gray-200 hover:bg-[#374151]'
                 }`}
               >
                 {listening ? (
@@ -298,7 +298,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
                 disabled={busy || listening}
               >
                 <SelectTrigger
-                  className="h-8 w-[110px] border-slate-300 text-xs"
+                  className="h-8 w-[110px] border-[#374151] bg-[#111827] text-xs text-gray-200"
                   aria-label="Voice input language"
                 >
                   <SelectValue />
@@ -313,7 +313,7 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
               </Select>
             </div>
             {listening && (
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-red-600">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-red-400">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600" />
@@ -329,20 +329,19 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
                     variant="outline"
                     size="sm"
                     disabled
-                    className="h-8 gap-1.5 border-dashed border-slate-300 text-xs text-slate-400"
+                    className="h-8 gap-1.5 border-dashed border-[#374151] bg-transparent text-xs text-gray-600"
                     aria-label="Photo upload (demo stub)"
                   >
-                    <Camera className="h-3.5 w-3.5" aria-hidden />
-                    Photo
+                    📷 Photo
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  MVP: photo ingestion is v2 — placeholder icon only.
+                  MVP: photo ingestion is v2 — placeholder only.
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
-          <p className="text-[10px] leading-snug text-slate-400">
+          <p className="text-[10px] leading-snug text-gray-600">
             Voice runs on the browser-native Web Speech API (Chrome/Edge) — a
             stopgap that proves the UX. Production swaps in AI4Bharat&apos;s
             open-source IndicConformer ASR for all 22 scheduled languages.
@@ -350,22 +349,22 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="citizen-name" className="text-xs font-semibold text-slate-600">
+              <Label htmlFor="citizen-name" className="text-xs font-semibold text-gray-300">
                 Your name (optional)
               </Label>
               <Input
                 id="citizen-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Lakshmi R."
-                className="text-sm"
+                placeholder="e.g. Shobha Charate"
+                className="border-[#374151] bg-[#111827] text-sm text-white placeholder:text-gray-600"
                 disabled={busy}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-600">Channel</Label>
+              <Label className="text-xs font-semibold text-gray-300">Channel</Label>
               <Select value={channel} onValueChange={setChannel} disabled={busy}>
-                <SelectTrigger className="text-sm">
+                <SelectTrigger className="border-[#374151] bg-[#111827] text-sm text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -381,14 +380,20 @@ export function SubmitDialog({ open, onOpenChange, onSubmitted }: SubmitDialogPr
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+            className="text-gray-400 hover:bg-[#374151] hover:text-white"
+          >
             Cancel
           </Button>
           <Button
             size="sm"
             onClick={submit}
             disabled={busy || !text.trim()}
-            className="gap-1.5 bg-emerald-700 font-semibold text-white hover:bg-emerald-800"
+            className="gap-1.5 bg-amber-600 font-semibold text-white hover:bg-amber-500"
           >
             {busy ? (
               <>

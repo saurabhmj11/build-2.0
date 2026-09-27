@@ -84,7 +84,7 @@ export async function classifyAndMatch(
 Do TWO jobs in one pass:
 
 JOB 1 — CLASSIFY. Return:
-- "category": exactly one of [Roads, Water, Sanitation, Electricity, Health, Education, Parks, Safety, Other]
+- "category": exactly one of [Roads, Water, Drainage, Sanitation, Electricity, Health, Education, Parks, Safety, Pollution, Other] (Drainage = waterlogging, flooded underpasses, blocked storm drains; Pollution = smoke, air quality, emissions, industrial odour)
 - "urgency": integer 1-5 (5 = immediate danger to life/health e.g. contaminated water, accidents, hospital failures; 4 = serious public harm e.g. large potholes, garbage piling, broken school wall; 3 = significant daily hardship e.g. streetlights out; 2 = nuisance e.g. stray animals; 1 = routine)
 - "ward": extract ward like "Ward 12" if mentioned, else "Unknown"
 - "location": specific place mentioned, else "Not specified"
@@ -147,14 +147,16 @@ Return ONLY valid JSON, no prose:
 // ─────────────────────────────────────────────────────────────────────────
 
 const CATEGORY_KEYWORDS: { category: Category; words: string[] }[] = [
-  { category: 'Roads', words: ['pothole', 'road', 'gadda', 'गड्ढा', 'गड्डे', 'सड़क', 'खड्डे', 'குழி', 'சாலை', 'রাস্তা', 'গর্ত'] },
-  { category: 'Water', words: ['water', 'पानी', 'नल', 'कुटिनीर', 'தண்ணீர்', 'நீர்', 'জল', 'pipeline', 'जल'] },
-  { category: 'Sanitation', words: ['garbage', 'कचरा', 'नाला', 'ड्रेन', 'waste', 'குப்பை', 'சாக்கடை', 'ময়লা', 'ড্রেন'] },
-  { category: 'Electricity', words: ['streetlight', 'light', 'लाइट', 'बत्ती', 'स्ट्रीट लाइट', 'விளக்கு', 'বাতি'] },
-  { category: 'Health', words: ['hospital', 'medicine', 'अस्पताल', 'दवा', 'मरुत्तुव', 'மருத்துவமனை', 'மருந்து', 'হাসপাতাল'] },
-  { category: 'Education', words: ['school', 'स्कूल', 'स्कूल दीवार', 'विद्यालय', 'பள்ளி', 'স্কুল'] },
-  { category: 'Parks', words: ['park', 'swing', 'पार्क', 'झूला', 'பூங்கா', 'পার্ক'] },
-  { category: 'Safety', words: ['stray', 'cattle', 'गाय', 'सूअर', 'आवारा', 'மாடு', 'गोवंश'] },
+  { category: 'Drainage', words: ['waterlogg', 'flood', 'drain', 'नाला', 'गटार', 'पाणी साचल', 'पाणी भर', 'पाण्याखाली', 'अंडरपास', 'ड्रेन', 'निचरा', 'underpass'] },
+  { category: 'Roads', words: ['pothole', 'road', 'gadda', 'गड्ढा', 'गड्डे', 'सड़क', 'रस्ता', 'खड्डे', 'footpath', 'फुटपाथ'] },
+  { category: 'Water', words: ['water', 'पानी', 'पाणी', 'नल', 'ताणीर', 'पाण्याचा पुरवठा', 'जल', 'pipeline', 'borewell', 'बोअरवेल', 'सुख्खा'] },
+  { category: 'Sanitation', words: ['garbage', 'कचरा', 'waste', 'कचऱ्याचा', 'डास'] },
+  { category: 'Pollution', words: ['pollution', 'smoke', 'air quality', 'धुर', 'धुआं', 'प्रदूषण', 'हवा खराब', 'emission', 'odour'] },
+  { category: 'Electricity', words: ['streetlight', 'light', 'लाइट', 'बत्ती', 'स्ट्रीटलाइट', 'विळक'] },
+  { category: 'Health', words: ['hospital', 'medicine', 'अस्पताल', 'दवा', 'औषध', 'स्वास्थ्य केंद्र', 'आरोग्य'] },
+  { category: 'Education', words: ['school', 'स्कूल', 'विद्यालय', 'शाळा'] },
+  { category: 'Parks', words: ['park', 'swing', 'पार्क', 'झूला'] },
+  { category: 'Safety', words: ['stray', 'cattle', 'गाय', 'सूअर', 'आवारा', 'manhole', 'accident'] },
 ];
 
 const DANGER_WORDS = ['accident', 'गिर', 'पलट', 'घायल', 'hospitalized', 'मौत', 'die', 'death', 'விபத்து', 'காயம்', 'দুর্ঘটনা', 'infection', 'बीमार'];
@@ -343,7 +345,7 @@ function verificationContextBlock(issue: IssueView): string {
   }
   if (v.coordinationSuspected) {
     lines.push(
-      `- POSSIBLE COORDINATED INPUT: ${v.templatedGroupSize} of ${issue.count} complaints share near-identical templated wording from different submitters (${v.templatedGroupSubmitters.join(', ')}) within a short window. Treat the reported volume with caution — the action plan should include verifying submitter authenticity before treating this as mass demand.`,
+      `- POSSIBLE COORDINATED INPUT: ${v.templatedGroupSize} of ${issue.count} complaints share near-identical templated wording from different submitters (${v.templatedGroupSubmitters.join(', ')}) within a short window. The cluster is QUARANTINED from ranking (priority capped at urgency) pending human review. Treat the reported volume with caution — the action plan should include verifying submitter authenticity before treating this as mass demand.`,
     );
   }
   if (issue.disputed) {
@@ -413,12 +415,14 @@ function fallbackEstimate(issue: IssueView): number {
   const table: Record<string, number> = {
     Roads: 22,
     Water: 20,
+    Drainage: 14,
     Sanitation: 8,
     Electricity: 6,
     Health: 15,
     Education: 18,
     Parks: 9,
     Safety: 5,
+    Pollution: 12,
     Other: 10,
   };
   return table[issue.category] ?? 10;
