@@ -18,6 +18,27 @@ export const DISPUTED_HEX = '#B91C4A';
 /** Amber for MPLADS sanction strips ("separate fact", dashed border). */
 export const SANCTION_HEX = '#D97706';
 
+/** Module 6 — quality band colors: Good emerald · Satisfactory amber · Poor red. */
+export const QUALITY_HEX = {
+  Good: '#10B981',
+  Satisfactory: '#D97706',
+  Poor: '#DC2626',
+} as const;
+
+export const QUALITY_BAND_STYLE = {
+  Good: 'bg-emerald-950/40 text-emerald-400 ring-1 ring-emerald-800',
+  Satisfactory: 'bg-amber-950/40 text-amber-400 ring-1 ring-amber-800',
+  Poor: 'bg-red-950/40 text-red-400 ring-1 ring-red-800',
+} as const;
+
+/** 1–5 rating rendered as filled/hollow stars + numeric value. */
+export function stars(rating: number): { filled: number; label: string } {
+  return {
+    filled: Math.round(rating),
+    label: `${rating.toFixed(1)}/5`,
+  };
+}
+
 /** Muted dark category chips — categories are labels, never priority signals. */
 export const CATEGORY_STYLE: Record<Category, string> = {
   Roads: 'bg-stone-800 text-stone-300 border-stone-600',

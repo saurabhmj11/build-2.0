@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '@/components/cp/header';
 import { EntryScreen } from '@/components/cp/entry-screen';
 import { FundStrip } from '@/components/cp/fund-strip';
+import { FundDialog } from '@/components/cp/fund-dialog';
 import { VerificationStrip } from '@/components/cp/verification-strip';
 import { WardMap } from '@/components/cp/ward-map';
 import { LiveFeed } from '@/components/cp/live-feed';
@@ -32,6 +33,7 @@ export default function Home() {
   const [reportOpen, setReportOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [infraOpen, setInfraOpen] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
   const [wardFilter, setWardFilter] = useState<string | null>(null);
   const processingRef = useRef(false);
@@ -281,8 +283,11 @@ export default function Home() {
 
               {/* Right column — the signal */}
               <section aria-label="Ranked priority issues" className="flex flex-col gap-3">
-                {/* Fund summary strip — thin context line above the cards (DESIGN.md) */}
-                <FundStrip fund={state.fundSummary} />
+                {/* Fund summary strip — Module 6 snapshot above the cards */}
+                <FundStrip
+                  fund={state.fundSummary}
+                  onOpenLedger={() => setLedgerOpen(true)}
+                />
 
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <h2 className="flex items-center gap-2 text-sm font-bold text-white">
@@ -405,6 +410,15 @@ export default function Home() {
         onOpenChange={setSubmitOpen}
         onSubmitted={handleSubmitted}
       />
+      {state && (
+        <FundDialog
+          open={ledgerOpen}
+          onOpenChange={setLedgerOpen}
+          fund={state.fundSummary}
+          works={state.mpladsWorks}
+          constituencyName={state.constituency.name}
+        />
+      )}
       <InfraDialog open={infraOpen} onOpenChange={setInfraOpen} />
     </div>
   );

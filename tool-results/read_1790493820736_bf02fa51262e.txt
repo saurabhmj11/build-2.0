@@ -1,0 +1,803 @@
+     1→import {
+     2→  Category,
+     3→  Issue,
+     4→  MpladsRecord,
+     5→  ProfileSource,
+     6→  Source,
+     7→  SubmitterProfile,
+     8→  Urgency,
+     9→} from './types';
+    10→
+    11→/**
+    12→ * Two-constituency Maharashtra pilot (ARCHITECTURE.md):
+    13→ *  - Nagpur  (Vidarbha, semi-urban): roads, borewell water, PHC, agri-market —
+    14→ *    fewer & larger MPLADS works, plus the duplicate-filer manipulation cluster.
+    15→ *  - Mumbai North (dense metro): waterlogging, garbage, air quality, streetlights —
+    16→ *    many smaller works, high volume, and a templated multi-account spam campaign.
+    17→ *
+    18→ * Seeds are "historical" pre-classified archives (as any office would have);
+    19→ * every NEW complaint (live sim / citizen submit) runs the live LLM pipeline.
+    20→ * Language texture per the pilot: Marathi + Hindi + English + Hinglish.
+    21→ */
+    22→
+    23→interface SeedComplaintSpec {
+    24→  id: string;
+    25→  issueId: string;
+    26→  textOriginal: string;
+    27→  language: string;
+    28→  translationEn: string;
+    29→  summaryEn: string;
+    30→  category: Category;
+    31→  urgency: Urgency;
+    32→  ward: string;
+    33→  location: string;
+    34→  source: Source;
+    35→  submittedBy: string;
+    36→  minutesAgo: number;
+    37→  /** Module 5 — occupation profile (absent = general citizen) */
+    38→  submitterProfile?: SubmitterProfile;
+    39→  /** 'declared' at intake or 'inferred' from the text itself */
+    40→  profileSource?: ProfileSource;
+    41→}
+    42→
+    43→export interface LivePoolItem {
+    44→  text: string;
+    45→  source: Source;
+    46→  submittedBy: string;
+    47→}
+    48→
+    49→export interface ConstituencySeed {
+    50→  /** mock phone-verified identities — same id = same citizen (ARCHITECTURE.md 4a) */
+    51→  submitters: Record<string, string>;
+    52→  issues: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivityAt'>[];
+    53→  complaints: SeedComplaintSpec[];
+    54→  mplads: MpladsRecord[];
+    55→  livePool: LivePoolItem[];
+    56→}
+    57→
+    58→/** MPLADS entitlement: ₹5 crore per MP per year */
+    59→export const MPLADS_ENTITLEMENT_LAKH = 500;
+    60→
+    61→// ═══════════════════════════════════════════════════════════════════════════
+    62→// NAGPUR — Vidarbha, semi-urban / rural-adjacent
+    63→// ═══════════════════════════════════════════════════════════════════════════
+    64→
+    65→const NAGPUR_SUBMITTERS: Record<string, string> = {
+    66→  'Pravin Deshmukh': 'PH-90210-4401',
+    67→  'Ramesh Gupta': 'PH-90210-4402',
+    68→  'Ankit Meshram': 'PH-90210-4403',
+    69→  'Mohd. Arif': 'PH-90210-4404',
+    70→  'Sunita Kale': 'PH-90210-4405',
+    71→  'Yogesh Gadwal': 'PH-90210-4406',
+    72→  'Shobha Charate': 'PH-90210-4407',
+    73→  'Dinesh Wankhede': 'PH-90210-4408',
+    74→  'Bhavna Kale': 'PH-90210-4409',
+    75→  'Rajesh Dhoke': 'PH-90210-4410',
+    76→  'Vinod Chavhan': 'PH-90210-4411',
+    77→  'Nanda Meshram': 'PH-90210-4412',
+    78→  'Suresh Bodile': 'PH-90210-4413',
+    79→  'Kisan Patil': 'PH-90210-4414',
+    80→  'Waman Wanarkar': 'PH-90210-4415',
+    81→  'Alok Ranjan': 'PH-90210-4416', // ×3 — manipulation cluster
+    82→  'Pankaj Verma': 'PH-90210-4417', // ×2 — manipulation cluster
+    83→  // Module 5 — Kalamna mandi farmers (the farmer-weighted cluster)
+    84→  'Bapu Madavi': 'PH-90210-4418',
+    85→  'Kausalya Ghatol': 'PH-90210-4419',
+    86→  // Module 5 — Ward 13 PHC complainants (general citizens)
+    87→  'Sadhana Bhoyar': 'PH-90210-4420',
+    88→  'Iqbal Mansuri': 'PH-90210-4421',
+    89→  'Gajanan Charde': 'PH-90210-4422',
+    90→  'Rekha Bagade': 'PH-90210-4423',
+    91→};
+    92→
+    93→const NAGPUR_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivityAt'>[] = [
+    94→  { id: 'ngp-road-12', title: 'Deep potholes on Kamptee Road service lane', category: 'Roads', ward: 'Ward 12', location: 'Kamptee Road service lane, near bus stop', urgency: 5 },
+    95→  { id: 'ngp-water-5', title: 'Borewell water supply irregular in Hudkeshwar', category: 'Water', ward: 'Ward 5', location: 'Hudkeshwar & surrounding layouts', urgency: 4 },
+    96→  // 4b demo: official record says the Koradi road repair COMPLETED on 10 Jun 2026,
+    97→  // yet fresh complaints keep arriving after that date → DISPUTED, not hidden.
+    98→  { id: 'ngp-road-8', title: "Koradi internal road broken again after 'completed' repair", category: 'Roads', ward: 'Ward 8', location: 'Koradi internal road, temple stretch', urgency: 4 },
+    99→  // Module 5 demo pair — the occupation-weighted flip:
+   100→  //   Kalamna mandi road (Roads, 4 distinct FARMERS × urgency 4 = 16 unweighted, ×1.4 → 22.4)
+   101→  //   vs Ward 13 PHC (Health, 4 distinct general citizens × urgency 4 = 16, ×1.3 → 20.8).
+   102→  // Identical unweighted scores; the farmer cluster ranks ABOVE the PHC because
+   103→  // its reporters face a harvest-window deadline. Counterfactual on the card:
+   104→  // the same 4 citizens as general reporters → 16 × 1.1 = 17.6 < 20.8 (below the PHC).
+   105→  { id: 'ngp-mandi-15', title: 'Kalamna mandi approach road unusable for farm produce', category: 'Roads', ward: 'Ward 15', location: 'Kalamna market committee approach road', urgency: 4 },
+   106→  { id: 'ngp-health-13', title: 'Besa PHC (Ward 13) without doctor or medicines for three weeks', category: 'Health', ward: 'Ward 13', location: 'Besa Primary Health Centre, Ward 13', urgency: 4 },
+   107→  { id: 'ngp-light-3', title: 'Streetlights out for a fortnight, Ward 3 lanes', category: 'Electricity', ward: 'Ward 3', location: 'Residential lanes, Ward 3', urgency: 3 },
+   108→  // 4a demo: 5 reports, only 2 distinct submitters, near-identical templated wording.
+   109→  // Raw volume scores 20; verified ranking de-weights duplicates AND quarantines
+   110→  // the template group (rank capped at urgency).
+   111→  { id: 'ngp-speed-10', title: 'Speed breaker demand outside Sun Shine School', category: 'Roads', ward: 'Ward 10', location: 'Main road outside Sun Shine School', urgency: 4 },
+   112→];
+   113→
+   114→const NAGPUR_COMPLAINTS: SeedComplaintSpec[] = [
+   115→  // ── Flagship: Kamptee Road potholes, Ward 12 (6 distinct citizens) ──
+   116→  {
+   117→    id: 'nc-001', issueId: 'ngp-road-12',
+   118→    textOriginal: 'वॉर्ड १२ मध्ये कामपठी रोडवर मोठे खड्डे पडले आहेत. आज सकाळी एका मावशीचा स्कूटर घसरला आणि पायाला दुखापत झाली.',
+   119→    language: 'Marathi',
+   120→    translationEn: 'Huge potholes have formed on Kamptee Road in Ward 12. This morning a lady\'s scooter skidded and she injured her leg.',
+   121→    summaryEn: 'Kamptee Road potholes; scooter accident with leg injury this morning',
+   122→    category: 'Roads', urgency: 5, ward: 'Ward 12', location: 'Kamptee Road service lane',
+   123→    source: 'WhatsApp', submittedBy: 'Pravin Deshmukh', minutesAgo: 290,
+   124→  },
+   125→  {
+   126→    id: 'nc-002', issueId: 'ngp-road-12',
+   127→    textOriginal: 'वार्ड 12 कामपठी रोड सर्विस लेन की हालत बहुत खराब है। तीन बड़े गड्ढे हैं, कल स्कूल वैन फिसल गई थी।',
+   128→    language: 'Hindi',
+   129→    translationEn: 'The Kamptee Road service lane in Ward 12 is in very bad shape. There are three big potholes; a school van skidded yesterday.',
+   130→    summaryEn: 'Three big potholes on Kamptee Road; school van skidded yesterday',
+   131→    category: 'Roads', urgency: 5, ward: 'Ward 12', location: 'Kamptee Road service lane',
+   132→    source: 'Phone', submittedBy: 'Ramesh Gupta', minutesAgo: 245,
+   133→  },
+   134→  {
+   135→    id: 'nc-003', issueId: 'ngp-road-12',
+   136→    textOriginal: 'The Kamptee Road service lane in Ward 12 is full of deep potholes. Two-wheelers skid every evening — this needs urgent repair before someone is killed.',
+   137→    language: 'English',
+   138→    translationEn: 'The Kamptee Road service lane in Ward 12 is full of deep potholes. Two-wheelers skid every evening — this needs urgent repair before someone is killed.',
+   139→    summaryEn: 'Deep potholes on Kamptee Road; two-wheelers skidding every evening',
+   140→    category: 'Roads', urgency: 5, ward: 'Ward 12', location: 'Kamptee Road service lane, near bus stop',
+   141→    source: 'App', submittedBy: 'Ankit Meshram', minutesAgo: 190,
+   142→  },
+   143→  {
+   144→    id: 'nc-004', issueId: 'ngp-road-12',
+   145→    textOriginal: 'Kamptee Road service lane Ward 12 me gadde bahut bade hain. Aaj subah ek auto palta, do log chhot lag gaye.',
+   146→    language: 'Hinglish',
+   147→    translationEn: 'The potholes on the Kamptee Road service lane in Ward 12 are huge. An auto rickshaw overturned this morning and two people were hurt.',
+   148→    summaryEn: 'Kamptee Road potholes; auto overturned, two injured this morning',
+   149→    category: 'Roads', urgency: 5, ward: 'Ward 12', location: 'Kamptee Road service lane',
+   150→    source: 'WhatsApp', submittedBy: 'Mohd. Arif', minutesAgo: 140,
+   151→  },
+   152→  {
+   153→    id: 'nc-005', issueId: 'ngp-road-12',
+   154→    textOriginal: 'कामपठी रोडवरील खड्ड्यांमुळे रोज रहदारी अडचणीत येते. रात्री काही दिसत नाही. नगर महापालिका काहीही करत नाही. वॉर्ड १२.',
+   155→    language: 'Marathi',
+   156→    translationEn: 'Because of the potholes on Kamptee Road, commuters face trouble daily. Nothing is visible at night. The municipal corporation does nothing. Ward 12.',
+   157→    summaryEn: 'Daily commuter trouble from Kamptee Road potholes; no action',
+   158→    category: 'Roads', urgency: 4, ward: 'Ward 12', location: 'Kamptee Road service lane',
+   159→    source: 'Letter', submittedBy: 'Sunita Kale', minutesAgo: 95,
+   160→  },
+   161→  {
+   162→    id: 'nc-006', issueId: 'ngp-road-12',
+   163→    textOriginal: 'मैं वार्ड 12 का रहने वाला हूँ। कामपठी रोड के गड्ढों से रोज छोटे हादसे होते हैं, रात में बैरिकेड भी नहीं लगी हैं।',
+   164→    language: 'Hindi',
+   165→    translationEn: 'I am a Ward 12 resident. The Kamptee Road potholes cause minor accidents daily, and there are not even barricades at night.',
+   166→    summaryEn: 'Daily minor accidents on Kamptee Road; no night barricades',
+   167→    category: 'Roads', urgency: 4, ward: 'Ward 12', location: 'Kamptee Road service lane',
+   168→    source: 'Walk-in', submittedBy: 'Yogesh Gadwal', minutesAgo: 60,
+   169→  },
+   170→
+   171→  // ── Borewell water, Ward 5 (4 distinct citizens) ──
+   172→  {
+   173→    id: 'nc-007', issueId: 'ngp-water-5',
+   174→    textOriginal: 'वॉर्ड ५ हुडकेश्वरमध्ये बोअरवेलच्या पाण्याचा पुरवठा आठवड्यापासून बंद आहे. संपूर्ण वसाहत टॅंकरवर अवलंबून आहे.',
+   175→    language: 'Marathi',
+   176→    translationEn: 'In Hudkeshwar, Ward 5, the borewell water supply has been stopped for a week. The entire layout depends on tankers.',
+   177→    summaryEn: 'Borewell supply stopped for a week in Hudkeshwar; layout on tankers',
+   178→    category: 'Water', urgency: 4, ward: 'Ward 5', location: 'Hudkeshwar layouts',
+   179→    source: 'WhatsApp', submittedBy: 'Shobha Charate', minutesAgo: 620,
+   180→  },
+   181→  {
+   182→    id: 'nc-008', issueId: 'ngp-water-5',
+   183→    textOriginal: 'वार्ड 5 में नल का पानी हर दो दिन में आता है, वह भी एक घंटे के लिए। बोअरवेल भी सूख गया है।',
+   184→    language: 'Hindi',
+   185→    translationEn: 'In Ward 5 tap water comes once in two days, and only for an hour. The borewell has also run dry.',
+   186→    summaryEn: 'Tap water once in two days in Ward 5; borewell dry',
+   187→    category: 'Water', urgency: 4, ward: 'Ward 5', location: 'Hudkeshwar',
+   188→    source: 'Phone', submittedBy: 'Dinesh Wankhede', minutesAgo: 480,
+   189→  },
+   190→  {
+   191→    id: 'nc-009', issueId: 'ngp-water-5',
+   192→    textOriginal: 'Water supply in Hudkeshwar (Ward 5) comes once in two days for about an hour. The community borewell has been dry for a week — we are buying bottled water.',
+   193→    language: 'English',
+   194→    translationEn: 'Water supply in Hudkeshwar (Ward 5) comes once in two days for about an hour. The community borewell has been dry for a week — we are buying bottled water.',
+   195→    summaryEn: 'Hour-long supply every two days in Hudkeshwar; borewell dry',
+   196→    category: 'Water', urgency: 4, ward: 'Ward 5', location: 'Hudkeshwar layouts',
+   197→    source: 'App', submittedBy: 'Bhavna Kale', minutesAgo: 300,
+   198→  },
+   199→  {
+   200→    id: 'nc-010', issueId: 'ngp-water-5',
+   201→    textOriginal: 'हुडकेश्वर वॉर्ड ५ मध्ये पाण्यासाठी लोक रोज दोन किलोमीटर पायी जात आहेत. उन्हाळा अजून संपला नाही.',
+   202→    language: 'Marathi',
+   203→    translationEn: 'In Hudkeshwar Ward 5, people walk two kilometres daily for water. The summer is not over yet.',
+   204→    summaryEn: 'Residents walking 2 km daily for water in Hudkeshwar',
+   205→    category: 'Water', urgency: 4, ward: 'Ward 5', location: 'Hudkeshwar layouts',
+   206→    source: 'Walk-in', submittedBy: 'Rajesh Dhoke', minutesAgo: 210,
+   207→  },
+   208→
+   209→  // ── Koradi road — the DISPUTED completion (all complaints AFTER 10 Jun 2026) ──
+   210→  {
+   211→    id: 'nc-011', issueId: 'ngp-road-8',
+   212→    textOriginal: 'The "repaired" internal road in Koradi (Ward 8) is already breaking apart again. Loose gravel everywhere, two bike falls this week near the temple stretch.',
+   213→    language: 'English',
+   214→    translationEn: 'The "repaired" internal road in Koradi (Ward 8) is already breaking apart again. Loose gravel everywhere, two bike falls this week near the temple stretch.',
+   215→    summaryEn: 'Koradi "repaired" road breaking apart again; two bike falls',
+   216→    category: 'Roads', urgency: 4, ward: 'Ward 8', location: 'Koradi internal road, temple stretch',
+   217→    source: 'WhatsApp', submittedBy: 'Vinod Chavhan', minutesAgo: 36000, // ~25 days ago
+   218→  },
+   219→  {
+   220→    id: 'nc-012', issueId: 'ngp-road-8',
+   221→    textOriginal: 'कोराडी गावातील रस्त्याची दुरुस्ती झाली असे सांगितले जाते, पण रस्ता तसाच खराब आहे. वॉर्ड ८.',
+   222→    language: 'Marathi',
+   223→    translationEn: 'They say the village road in Koradi has been repaired, but the road is just as bad. Ward 8.',
+   224→    summaryEn: 'Koradi road still bad despite claimed repair',
+   225→    category: 'Roads', urgency: 4, ward: 'Ward 8', location: 'Koradi internal road',
+   226→    source: 'Phone', submittedBy: 'Nanda Meshram', minutesAgo: 17280, // ~12 days ago
+   227→  },
+   228→  {
+   229→    id: 'nc-013', issueId: 'ngp-road-8',
+   230→    textOriginal: 'वार्ड 8 कोराडी रोड की मरम्मत पूरी हुई थी, लेकिन गड्ढे फिर से आ गए हैं। ऐसा काम कैसे हुआ?',
+   231→    language: 'Hindi',
+   232→    translationEn: 'The Koradi road repair in Ward 8 was completed, but the potholes are back. How was this work done?',
+   233→    summaryEn: 'Koradi road potholes back despite completed repair',
+   234→    category: 'Roads', urgency: 4, ward: 'Ward 8', location: 'Koradi internal road',
+   235→    source: 'Walk-in', submittedBy: 'Suresh Bodile', minutesAgo: 7200, // ~5 days ago
+   236→  },
+   237→
+   238→  // ── Kalamna mandi approach road — the FARMER-weighted cluster (4 distinct farmers) ──
+   239→  {
+   240→    id: 'nc-014', issueId: 'ngp-mandi-15',
+   241→    textOriginal: 'कालमना मंडी का रास्ता कीचड़ से भर गया है। ट्रैक्टर फंस रहे हैं, सब्ज़ी मंडी तक पहुंचानी पड़ती है। वार्ड 15।',
+   242→    language: 'Hindi',
+   243→    translationEn: 'The Kalamna mandi approach road is full of mud. Tractors are getting stuck; produce has to be carried to the market by hand. Ward 15.',
+   244→    summaryEn: 'Kalamna mandi approach road muddy; tractors stuck',
+   245→    category: 'Roads', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
+   246→    source: 'Phone', submittedBy: 'Kisan Patil', minutesAgo: 900,
+   247→    submitterProfile: 'farmer', profileSource: 'declared',
+   248→  },
+   249→  {
+   250→    id: 'nc-015', issueId: 'ngp-mandi-15',
+   251→    textOriginal: 'कळमणा बाजार समितीचा रस्ता खराब असल्याने शेतकऱ्यांना भाजीपाला नेणे कठीण जाते. वॉर्ड १५.',
+   252→    language: 'Marathi',
+   253→    translationEn: 'Because the Kalamna market committee road is bad, farmers are finding it hard to transport vegetables. Ward 15.',
+   254→    summaryEn: 'Farmers struggling to transport produce on Kalamna mandi road',
+   255→    category: 'Roads', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
+   256→    source: 'WhatsApp', submittedBy: 'Waman Wanarkar', minutesAgo: 640,
+   257→    submitterProfile: 'farmer', profileSource: 'declared',
+   258→  },
+   259→  // harvest-window texture — urgency 4 lifts the cluster; profile inferred
+   260→  // from the text itself (soybean crop waiting, tractor-trolley stuck)
+   261→  {
+   262→    id: 'nc-023', issueId: 'ngp-mandi-15',
+   263→    textOriginal: 'सोयाबीन की फसल कट गई है, लेकिन कालमना मंडी का रस्ता कीचड़ में डूबा है। ट्रैक्टर-ट्रॉली अटकती है, फसल खेत में पड़ी है। वार्ड 15।',
+   264→    language: 'Hindi',
+   265→    translationEn: 'The soybean crop has been harvested, but the Kalamna mandi road is drowned in mud. Tractor-trolleys keep getting stuck; the crop is lying in the field. Ward 15.',
+   266→    summaryEn: 'Harvested soybean stuck in field — mandi road impassable',
+   267→    category: 'Roads', urgency: 4, ward: 'Ward 15', location: 'Kalamna market approach road',
+   268→    source: 'WhatsApp', submittedBy: 'Bapu Madavi', minutesAgo: 520,
+   269→    submitterProfile: 'farmer', profileSource: 'inferred',
+   270→  },
+   271→  {
+   272→    id: 'nc-024', issueId: 'ngp-mandi-15',
+   273→    textOriginal: 'आत्ता ऊस तोडणीचा हंगाम आहे, पण कळमणा बाजार समितीच्या रस्त्याने गाड्या जात नाहीत. ऊस बागेतच पडलाय. वॉर्ड १५.',
+   274→    language: 'Marathi',
+   275→    translationEn: 'It is sugarcane cutting season now, but vehicles cannot use the Kalamna market committee road. The cane is lying in the field itself. Ward 15.',
+   276→    summaryEn: 'Sugarcane harvest stuck — market committee road unusable',
+   277→    category: 'Roads', urgency: 4, ward: 'Ward 15', location: 'Kalamna market approach road',
+   278→    source: 'Phone', submittedBy: 'Kausalya Ghatol', minutesAgo: 300,
+   279→    submitterProfile: 'farmer', profileSource: 'inferred',
+   280→  },
+   281→
+   282→  // ── Besa PHC Ward 13 — the HEALTH contrast issue (4 distinct general citizens,
+   283→  //    same unweighted 16; no MPLADS match → unfunded) ──
+   284→  {
+   285→    id: 'nc-025', issueId: 'ngp-health-13',
+   286→    textOriginal: 'वॉर्ड १३ बेसा आरोग्य केंद्रात तीन आठवड्यांपासून डॉक्टरच नाही. गरोवरीच्या बायकांना शहरात धाडावे लागते.',
+   287→    language: 'Marathi',
+   288→    translationEn: 'The Besa health centre in Ward 13 has had no doctor for three weeks. Pregnant women are having to be sent to the city.',
+   289→    summaryEn: 'Besa PHC without doctor for three weeks; pregnant women referred out',
+   290→    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+   291→    source: 'WhatsApp', submittedBy: 'Sadhana Bhoyar', minutesAgo: 820,
+   292→  },
+   293→  {
+   294→    id: 'nc-026', issueId: 'ngp-health-13',
+   295→    textOriginal: 'वार्ड 13 के स्वास्थ्य केंद्र में तीन हफ्ते से डॉक्टर नहीं आ रहा। दवाइयां भी नहीं मिलतीं।',
+   296→    language: 'Hindi',
+   297→    translationEn: 'No doctor has been coming to the Ward 13 health centre for three weeks. Medicines are not available either.',
+   298→    summaryEn: 'Ward 13 health centre: no doctor for three weeks, no medicines',
+   299→    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+   300→    source: 'Phone', submittedBy: 'Iqbal Mansuri', minutesAgo: 560,
+   301→  },
+   302→  {
+   303→    id: 'nc-027', issueId: 'ngp-health-13',
+   304→    textOriginal: 'The Ward 13 PHC at Besa has had no doctor for three weeks and the medicine cupboard is empty. Fever patients are told to go to the city hospital, 20 km away.',
+   305→    language: 'English',
+   306→    translationEn: 'The Ward 13 PHC at Besa has had no doctor for three weeks and the medicine cupboard is empty. Fever patients are told to go to the city hospital, 20 km away.',
+   307→    summaryEn: 'Besa PHC empty of doctor and medicines; patients sent 20 km',
+   308→    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+   309→    source: 'App', submittedBy: 'Gajanan Charde', minutesAgo: 410,
+   310→  },
+   311→  {
+   312→    id: 'nc-028', issueId: 'ngp-health-13',
+   313→    textOriginal: 'Besa PHC Ward 13 me doctor teen hafte se nahi aa rahe. BP ki goli bhi nahi milti, bukhar walo ko sheher bhejna padta hai.',
+   314→    language: 'Hinglish',
+   315→    translationEn: 'No doctor has been coming to the Besa PHC in Ward 13 for three weeks. Even BP tablets are unavailable; fever patients have to be sent to the city.',
+   316→    summaryEn: 'Besa PHC: no doctor, no BP medicines for three weeks',
+   317→    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+   318→    source: 'WhatsApp', submittedBy: 'Rekha Bagade', minutesAgo: 150,
+   319→  },
+   320→
+   321→  // ── Streetlights, Ward 3 ──
+   322→  {
+   323→    id: 'nc-016', issueId: 'ngp-light-3',
+   324→    textOriginal: 'वॉर्ड ३ मधील गल्लीतील सर्व स्ट्रीटलाइट गेल्या पंधरा दिवसांपासून बंद आहेत. रात्री गल्ली पूर्ण अंधारी असते.',
+   325→    language: 'Marathi',
+   326→    translationEn: 'All streetlights in our lane in Ward 3 have been off for the last fifteen days. The lane is completely dark at night.',
+   327→    summaryEn: 'Streetlights off for fifteen days in Ward 3 lanes',
+   328→    category: 'Electricity', urgency: 3, ward: 'Ward 3', location: 'Ward 3 lanes',
+   329→    source: 'WhatsApp', submittedBy: 'Shobha Charate', minutesAgo: 450,
+   330→  },
+   331→  {
+   332→    id: 'nc-017', issueId: 'ngp-light-3',
+   333→    textOriginal: 'वार्ड 3 की गलियों में लाइटें पंद्रह दिन से बंद हैं। बच्चों को शाम को स्कूल से लौटने में दिक्कत होती है।',
+   334→    language: 'Hindi',
+   335→    translationEn: 'Lights in the Ward 3 lanes have been off for fifteen days. Children face difficulty returning from school in the evening.',
+   336→    summaryEn: 'Ward 3 streetlights off fifteen days; school children affected',
+   337→    category: 'Electricity', urgency: 3, ward: 'Ward 3', location: 'Ward 3 lanes',
+   338→    source: 'Phone', submittedBy: 'Dinesh Wankhede', minutesAgo: 330,
+   339→  },
+   340→
+   341→  // ── Speed-breaker "campaign" — 5 reports, 2 people, templated wording ──
+   342→  {
+   343→    id: 'nc-018', issueId: 'ngp-speed-10',
+   344→    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+   345→    language: 'Hindi',
+   346→    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+   347→    summaryEn: 'Urgent speed breaker demand outside Sun Shine School, Ward 10',
+   348→    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+   349→    source: 'WhatsApp', submittedBy: 'Alok Ranjan', minutesAgo: 58,
+   350→  },
+   351→  {
+   352→    id: 'nc-019', issueId: 'ngp-speed-10',
+   353→    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+   354→    language: 'Hindi',
+   355→    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+   356→    summaryEn: 'Urgent speed breaker demand outside Sun Shine School, Ward 10',
+   357→    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+   358→    source: 'WhatsApp', submittedBy: 'Alok Ranjan', minutesAgo: 51,
+   359→  },
+   360→  {
+   361→    id: 'nc-020', issueId: 'ngp-speed-10',
+   362→    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। बस स्टॉप भी पास है। कृपया जल्द काम कराएं।',
+   363→    language: 'Hindi',
+   364→    translationEn: 'Respected Sir, urgent need for a speed breaker on the main road outside Sun Shine School, Ward 10. Children face accident risk daily. The bus stop is also nearby. Please get it done soon.',
+   365→    summaryEn: 'Speed breaker demand outside Sun Shine School — bus stop nearby',
+   366→    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+   367→    source: 'Phone', submittedBy: 'Alok Ranjan', minutesAgo: 44,
+   368→  },
+   369→  {
+   370→    id: 'nc-021', issueId: 'ngp-speed-10',
+   371→    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया जल्द काम कराएं।',
+   372→    language: 'Hindi',
+   373→    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done soon.',
+   374→    summaryEn: 'Urgent speed breaker demand outside Sun Shine School, Ward 10',
+   375→    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+   376→    source: 'WhatsApp', submittedBy: 'Pankaj Verma', minutesAgo: 33,
+   377→  },
+   378→  {
+   379→    id: 'nc-022', issueId: 'ngp-speed-10',
+   380→    textOriginal: 'माननीय साहब, वार्ड 10 सन शाइन स्कूल के बाहर मेन रोड पर स्पीड ब्रेकर बनवाने की तुरंत जरूरत है। रोज़ बच्चों का हादसा होने का खतरा है। कृपया तुरंत काम कराएं।',
+   381→    language: 'Hindi',
+   382→    translationEn: 'Respected Sir, there is an urgent need to build a speed breaker on the main road outside Sun Shine School in Ward 10. Children face accident risk daily. Please get the work done immediately.',
+   383→    summaryEn: 'Urgent speed breaker demand outside Sun Shine School, Ward 10',
+   384→    category: 'Roads', urgency: 4, ward: 'Ward 10', location: 'Main road outside Sun Shine School',
+   385→    source: 'WhatsApp', submittedBy: 'Pankaj Verma', minutesAgo: 27,
+   386→  },
+   387→];
+   388→
+   389→const NAGPUR_MPLADS: MpladsRecord[] = [
+   390→  {
+   391→    id: 'ngp-mpl-01', workName: 'Kamptee Road service lane resurfacing (Ward 12 stretch)',
+   392→    ward: 'Ward 12', category: 'Roads', amountLakh: 12,
+   393→    sanctionDate: '2026-02-14', status: 'Delayed',
+   394→    implementingAgency: 'Nagpur Municipal Corporation — Roads Division',
+   395→  },
+   396→  {
+   397→    id: 'ngp-mpl-02', workName: 'New borewell + distribution pipeline, Hudkeshwar',
+   398→    ward: 'Ward 5', category: 'Water', amountLakh: 25,
+   399→    sanctionDate: '2025-11-20', status: 'Ongoing',
+   400→    implementingAgency: 'Public Health Engineering Dept / NMC Water Works',
+   401→  },
+   402→  {
+   403→    id: 'ngp-mpl-03', workName: 'Koradi internal road repair (temple stretch)',
+   404→    ward: 'Ward 8', category: 'Roads', amountLakh: 22,
+   405→    sanctionDate: '2025-09-05', completionDate: '2026-06-10', status: 'Completed',
+   406→    implementingAgency: 'NMC Roads Division',
+   407→  },
+   408→  {
+   409→    id: 'ngp-mpl-04', workName: 'Primary Health Centre Ward 9 — upgrade incl. medicine storage',
+   410→    ward: 'Ward 9', category: 'Health', amountLakh: 28,
+   411→    sanctionDate: '2025-12-05', status: 'Delayed',
+   412→    implementingAgency: 'District Health Society',
+   413→  },
+   414→  {
+   415→    id: 'ngp-mpl-05', workName: 'LED streetlight retrofit, Ward 3 lanes',
+   416→    ward: 'Ward 3', category: 'Electricity', amountLakh: 8,
+   417→    sanctionDate: '2026-07-01', status: 'Sanctioned – not started',
+   418→    implementingAgency: 'NMC Electrical Division',
+   419→  },
+   420→];
+   421→
+   422→const NAGPUR_LIVE_POOL: LivePoolItem[] = [
+   423→  // pothole cluster grows 6 → 9 (the clustering moment)
+   424→  {
+   425→    text: 'आज पहाटे कामपठी रोडवर खड्ड्यात ऑटो घसरला, दोन प्रवासी जखमी. वॉर्ड १२.',
+   426→    source: 'Phone', submittedBy: 'Bhola Dhoke',
+   427→  },
+   428→  {
+   429→    text: 'वार्ड 12 कामपठी रोड पर गड्ढा अब गड्डे में बदल गया है। बच्चे गिरते रहते हैं, कृपया जल्दी करें।',
+   430→    source: 'WhatsApp', submittedBy: 'Anjali Moon',
+   431→  },
+   432→  {
+   433→    text: 'Kamptee Road pe gadde itne bade hain ki aaj ambulance bhi atak gayi thi. Ward 12, please jaldi karo.',
+   434→    source: 'Voice note', submittedBy: 'Pappu Shahu',
+   435→  },
+   436→  // NEW ISSUE — PHC medicines, Ward 9 → mid-demo reveal of the Delayed ₹28L work
+   437→  {
+   438→    text: 'वॉर्ड ९ च्या प्राथमिक आरोग्य केंद्रात औषधे नाहीत. रक्तदाबाच्या गोळ्याही मिळत नाहीत, बाहेर विकत घ्याव्या लागतात.',
+   439→    source: 'WhatsApp', submittedBy: 'Sulochana Bokade',
+   440→  },
+   441→  {
+   442→    text: 'वार्ड 9 स्वास्थ्य केंद्र में दवाइयां नहीं मिल रहीं। बच्चों के टीके के लिए भी दो बार जाना पड़ा।',
+   443→    source: 'Phone', submittedBy: 'Imran Sheikh',
+   444→  },
+   445→  // disputed Koradi completion — "reports since" ticks up live
+   446→  {
+   447→    text: "Adding to the Koradi road complaints — the 'repaired' stretch near the temple is full of potholes again. Ward 8.",
+   448→    source: 'App', submittedBy: 'Sanjay Kalambe',
+   449→  },
+   450→  // water cluster grows 4 → 5
+   451→  {
+   452→    text: 'हुडकेश्वरमध्ये आजही पाणी नाही. संपूर्ण वसाहत टाकीकडे बघत बसली आहे. वॉर्ड ५.',
+   453→    source: 'WhatsApp', submittedBy: 'Meena Kalambe',
+   454→  },
+   455→  // mandi grows 4 → 5 (a fifth farmer — inference from "पिकाची … मंडीला";
+   456→  // farmer cluster priority visibly ticks up: 22.4 → 28)
+   457→  {
+   458→    text: 'कालमना मंडी का रास्ता बारिश में और बिगड़ गया। वार्ड 15, कृपया देखें।',
+   459→    source: 'WhatsApp', submittedBy: 'Rafiq Qureshi',
+   460→  },
+   461→  {
+   462→    text: 'माझी सोयाबीण पिकाची ट्रॉली आजही कळमण्या मंडीला जाऊ शकली नाही. वॉर्ड १५ चा रस्ता पाहा.',
+   463→    source: 'Phone', submittedBy: 'Rahul Khobragade',
+   464→  },
+   465→];
+   466→
+   467→// ═══════════════════════════════════════════════════════════════════════════
+   468→// MUMBAI NORTH — dense urban metro
+   469→// ═══════════════════════════════════════════════════════════════════════════
+   470→
+   471→const MUMBAI_SUBMITTERS: Record<string, string> = {
+   472→  'Vaishali Mhatre': 'PH-98201-7711',
+   473→  'Rakesh Jadhav': 'PH-98201-7712',
+   474→  'Cynthia Dsouza': 'PH-98201-7713',
+   475→  'Prakash Bhoir': 'PH-98201-7714',
+   476→  'Sandeep Yadav': 'PH-98201-7715',
+   477→  'Farida Bootwala': 'PH-98201-7716',
+   478→  'Mitesh Lala': 'PH-98201-7717',
+   479→  'Alpa Shah': 'PH-98201-7718',
+   480→  'Rajesh Mody': 'PH-98201-7719',
+   481→  'Kiran Bhatia': 'PH-98201-7720',
+   482→  'Deepak Sampat': 'PH-98201-7721',
+   483→  'Nikhil Rane': 'PH-98201-7722',
+   484→  'Usha Padte': 'PH-98201-7723',
+   485→  'Javed Khan': 'PH-98201-7724',
+   486→  'Ritu Singh': 'PH-98201-7725',
+   487→  'Ganesh More': 'PH-98201-7726',
+   488→};
+   489→
+   490→const MUMBAI_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivityAt'>[] = [
+   491→  // 4b flagship: pre-monsoon desilting marked Completed 28 Jun 2026 — yet the
+   492→  // underpass has flooded repeatedly since. DISPUTED, 8 reports and counting.
+   493→  { id: 'mum-drain-21', title: 'Waterlogging at SV Road underpass, Malad West', category: 'Drainage', ward: 'Ward 21', location: 'SV Road railway underpass, Malad West', urgency: 5 },
+   494→  // The CONTRAST case: vehicle purchased & completed 15 Aug 2026, complaints
+   495→  // stopped BEFORE that → verified clean, no dispute flag.
+   496→  { id: 'mum-garbage-3', title: 'Garbage pile-up near Dahisar market (resolved on record)', category: 'Sanitation', ward: 'Ward 3', location: 'Dahisar market approach', urgency: 4 },
+   497→  { id: 'mum-light-14', title: 'Streetlight outages across Kandivali West lanes', category: 'Electricity', ward: 'Ward 14', location: 'Kandivali West residential lanes', urgency: 3 },
+   498→  { id: 'mum-air-27', title: 'Morning smoke from Borivali East industrial belt', category: 'Pollution', ward: 'Ward 27', location: 'Borivali East industrial estate', urgency: 4 },
+   499→  // 4a metro variant: 4 near-identical Marathi appeals from 4 DIFFERENT phone
+   500→  // ids inside a ~30-minute window → templated campaign, quarantined.
+   501→  { id: 'mum-spam-22', title: 'Footpath repair demand, S V Road Malad', category: 'Roads', ward: 'Ward 22', location: 'S V Road footpath, Malad West', urgency: 4 },
+   502→];
+   503→
+   504→const MUMBAI_SPAM_TEMPLATE =
+   505→  'माननीय, एस.व्ही. रोड मलाड वॉर्ड २२ फुटपाथ लगेच दुरुस्त करावा. पादचाऱ्यांना अतोनात त्रास होतो आहे. कृपया लगेच निधी मंजूर करावे.';
+   506→
+   507→const MUMBAI_COMPLAINTS: SeedComplaintSpec[] = [
+   508→  // ── Flagship: SV Road underpass waterlogging, Ward 21 (8 distinct citizens, DISPUTED) ──
+   509→  {
+   510→    id: 'mc-001', issueId: 'mum-drain-21',
+   511→    textOriginal: 'एस.व्ही. रोड अंडरपास, मलाड पश्चिम येथे पावसाचे पाणी साचले आहे. रिक्षांची इंजिने बुडाली. वॉर्ड २१.',
+   512→    language: 'Marathi',
+   513→    translationEn: 'Rainwater has collected at the SV Road underpass, Malad West. Auto-rickshaw engines got submerged. Ward 21.',
+   514→    summaryEn: 'Rainwater logging at SV Road underpass; auto engines submerged',
+   515→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   516→    source: 'WhatsApp', submittedBy: 'Vaishali Mhatre', minutesAgo: 31680, // ~22 days after 28 Jun completion
+   517→  },
+   518→  {
+   519→    id: 'mc-002', issueId: 'mum-drain-21',
+   520→    textOriginal: 'वॉर्ड 21 मलाड अंडरपास में हर बारिश में पानी भर जाता है। स्कूल बस को दूसरा रास्ता लेना पड़ता है।',
+   521→    language: 'Hindi',
+   522→    translationEn: 'The Malad underpass in Ward 21 fills with water every rain. School buses have to take another route.',
+   523→    summaryEn: 'Malad underpass floods every rain; school buses diverted',
+   524→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   525→    source: 'Phone', submittedBy: 'Rakesh Jadhav', minutesAgo: 25920,
+   526→  },
+   527→  {
+   528→    id: 'mc-003', issueId: 'mum-drain-21',
+   529→    textOriginal: 'The Malad SV Road underpass floods every single rain. Three hours of rain yesterday and it was knee-deep again. Ward 21.',
+   530→    language: 'English',
+   531→    translationEn: 'The Malad SV Road underpass floods every single rain. Three hours of rain yesterday and it was knee-deep again. Ward 21.',
+   532→    summaryEn: 'SV Road underpass knee-deep again after three hours of rain',
+   533→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   534→    source: 'App', submittedBy: 'Cynthia Dsouza', minutesAgo: 21600,
+   535→  },
+   536→  {
+   537→    id: 'mc-004', issueId: 'mum-drain-21',
+   538→    textOriginal: 'अंडरपासमध्ये पाणी तासनतास उभे राहते. निचऱ्याचे काहीच झालेले नाही. वॉर्ड २१.',
+   539→    language: 'Marathi',
+   540→    translationEn: 'Water stands in the underpass for hours. No drainage work has happened at all. Ward 21.',
+   541→    summaryEn: 'Water standing for hours in underpass; no drainage done',
+   542→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   543→    source: 'WhatsApp', submittedBy: 'Prakash Bhoir', minutesAgo: 15840,
+   544→  },
+   545→  {
+   546→    id: 'mc-005', issueId: 'mum-drain-21',
+   547→    textOriginal: 'Malad underpass phir se bhar gaya. Ward 21. Traffic jam do ghante. Yeh har baar hota hai.',
+   548→    language: 'Hinglish',
+   549→    translationEn: 'The Malad underpass flooded again. Ward 21. Two hours of traffic jam. This happens every time.',
+   550→    summaryEn: 'Malad underpass flooded again; two-hour jam',
+   551→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   552→    source: 'WhatsApp', submittedBy: 'Sandeep Yadav', minutesAgo: 11520,
+   553→  },
+   554→  {
+   555→    id: 'mc-006', issueId: 'mum-drain-21',
+   556→    textOriginal: 'मलाड अंडरपास में पानी भरने से ऑटो ड्राइवर सवारियों को पैदल उतारने की स्थिति में हैं। वार्ड 21।',
+   557→    language: 'Hindi',
+   558→    translationEn: 'With the Malad underpass flooded, auto drivers are having to drop passengers on foot. Ward 21.',
+   559→    summaryEn: 'Flooded Malad underpass forcing auto passengers to walk',
+   560→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   561→    source: 'Phone', submittedBy: 'Farida Bootwala', minutesAgo: 8640,
+   562→  },
+   563→  {
+   564→    id: 'mc-007', issueId: 'mum-drain-21',
+   565→    textOriginal: 'पावसानंतर अंडरपास बंद करावा लागतो, दरवेळी एकच गोष्ट. वॉर्ड २१.',
+   566→    language: 'Marathi',
+   567→    translationEn: 'After every rain the underpass has to be closed — the same thing every time. Ward 21.',
+   568→    summaryEn: 'Underpass closed after every rain, same story each time',
+   569→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   570→    source: 'Letter', submittedBy: 'Mitesh Lala', minutesAgo: 4320,
+   571→  },
+   572→  {
+   573→    id: 'mc-008', issueId: 'mum-drain-21',
+   574→    textOriginal: 'Flooded underpass again this morning — Malad West, SV Road. Office-goers wading through. Ward 21.',
+   575→    language: 'English',
+   576→    translationEn: 'Flooded underpass again this morning — Malad West, SV Road. Office-goers wading through. Ward 21.',
+   577→    summaryEn: 'Office-goers wading through flooded SV Road underpass',
+   578→    category: 'Drainage', urgency: 5, ward: 'Ward 21', location: 'SV Road underpass, Malad West',
+   579→    source: 'WhatsApp', submittedBy: 'Alpa Shah', minutesAgo: 300,
+   580→  },
+   581→
+   582→  // ── Dahisar garbage — complaints all BEFORE the 15 Aug 2026 completion → clean ──
+   583→  {
+   584→    id: 'mc-009', issueId: 'mum-garbage-3',
+   585→    textOriginal: 'वार्ड 3 दहिसर बाजार के पास कचरा दस दिन से नहीं उठाया जा रहा। पूरा इलाका बदबू से भर गया है।',
+   586→    language: 'Hindi',
+   587→    translationEn: 'Garbage near the Dahisar market in Ward 3 has not been lifted for ten days. The whole area stinks.',
+   588→    summaryEn: 'Dahisar market garbage unlifted for ten days; area stinks',
+   589→    category: 'Sanitation', urgency: 4, ward: 'Ward 3', location: 'Dahisar market approach',
+   590→    source: 'WhatsApp', submittedBy: 'Javed Khan', minutesAgo: 86400, // ~60 days ago — BEFORE completion
+   591→  },
+   592→  {
+   593→    id: 'mc-010', issueId: 'mum-garbage-3',
+   594→    textOriginal: 'Garbage near Dahisar market (Ward 3) has not been lifted for over 10 days. Vendors are selling food right next to the pile.',
+   595→    language: 'English',
+   596→    translationEn: 'Garbage near Dahisar market (Ward 3) has not been lifted for over 10 days. Vendors are selling food right next to the pile.',
+   597→    summaryEn: 'Uncollected Dahisar market garbage; food vendors beside pile',
+   598→    category: 'Sanitation', urgency: 4, ward: 'Ward 3', location: 'Dahisar market approach',
+   599→    source: 'Phone', submittedBy: 'Ritu Singh', minutesAgo: 74880, // ~52 days ago
+   600→  },
+   601→  {
+   602→    id: 'mc-011', issueId: 'mum-garbage-3',
+   603→    textOriginal: 'दहिसर बाजारपेठेजवळचा कचरा उचललाच जात नाही. डासांचा त्रास सुरू झाला आहे. वॉर्ड ३.',
+   604→    language: 'Marathi',
+   605→    translationEn: 'The garbage near Dahisar market just is not being lifted. Mosquito menace has started. Ward 3.',
+   606→    summaryEn: 'Dahisar garbage not lifted; mosquito menace started',
+   607→    category: 'Sanitation', urgency: 4, ward: 'Ward 3', location: 'Dahisar market approach',
+   608→    source: 'Walk-in', submittedBy: 'Ganesh More', minutesAgo: 64800, // ~45 days ago
+   609→  },
+   610→
+   611→  // ── Kandivali streetlights, Ward 14 (4 distinct citizens) ──
+   612→  {
+   613→    id: 'mc-012', issueId: 'mum-light-14',
+   614→    textOriginal: 'कांदिवली पश्चिम वॉर्ड १४ मधील गल्ल्यांमधील स्ट्रीटलाइट पूर्ण महिन्यापासून बंद आहेत.',
+   615→    language: 'Marathi',
+   616→    translationEn: 'The streetlights in the lanes of Kandivali West, Ward 14, have been off for an entire month.',
+   617→    summaryEn: 'Kandivali West streetlights off for a month',
+   618→    category: 'Electricity', urgency: 3, ward: 'Ward 14', location: 'Kandivali West lanes',
+   619→    source: 'WhatsApp', submittedBy: 'Usha Padte', minutesAgo: 700,
+   620→  },
+   621→  {
+   622→    id: 'mc-013', issueId: 'mum-light-14',
+   623→    textOriginal: 'Streetlights on our lane in Kandivali West (Ward 14) have been dead for a month. Women avoid walking after 8pm.',
+   624→    language: 'English',
+   625→    translationEn: 'Streetlights on our lane in Kandivali West (Ward 14) have been dead for a month. Women avoid walking after 8pm.',
+   626→    summaryEn: 'Month-long streetlight outage in Kandivali West; unsafe after 8pm',
+   627→    category: 'Electricity', urgency: 3, ward: 'Ward 14', location: 'Kandivali West lanes',
+   628→    source: 'App', submittedBy: 'Cynthia Dsouza', minutesAgo: 540,
+   629→  },
+   630→  {
+   631→    id: 'mc-014', issueId: 'mum-light-14',
+   632→    textOriginal: 'वार्ड 14 कांदिवली की गलियों में लाइटें एक महीने से बंद हैं। रात में स्टेशन तक जाना मुश्किल है।',
+   633→    language: 'Hindi',
+   634→    translationEn: 'Lights in the Kandivali lanes of Ward 14 have been off for a month. Walking to the station at night is difficult.',
+   635→    summaryEn: 'Ward 14 lights off a month; night walk to station difficult',
+   636→    category: 'Electricity', urgency: 3, ward: 'Ward 14', location: 'Kandivali West lanes',
+   637→    source: 'Phone', submittedBy: 'Rakesh Jadhav', minutesAgo: 380,
+   638→  },
+   639→  {
+   640→    id: 'mc-015', issueId: 'mum-light-14',
+   641→    textOriginal: 'Kandivali West streetlights band hain ek mahine se. Ward 14. Raat me office se lautna risky ho gaya hai.',
+   642→    language: 'Hinglish',
+   643→    translationEn: 'Kandivali West streetlights have been off for a month. Ward 14. Returning from office at night has become risky.',
+   644→    summaryEn: 'Risky night commutes with month-long Kandivali outage',
+   645→    category: 'Electricity', urgency: 3, ward: 'Ward 14', location: 'Kandivali West lanes',
+   646→    source: 'WhatsApp', submittedBy: 'Sandeep Yadav', minutesAgo: 200,
+   647→  },
+   648→
+   649→  // ── Borivali East air quality, Ward 27 (3 distinct citizens) ──
+   650→  {
+   651→    id: 'mc-016', issueId: 'mum-air-27',
+   652→    textOriginal: 'बोरिवली पूर्व औद्योगिक वसाहतीतून येणाऱ्या धुरामुळे सकाळी श्वास घेणेही कठीण जाते. वॉर्ड २७.',
+   653→    language: 'Marathi',
+   654→    translationEn: 'Because of the smoke coming from the Borivali East industrial estate, even breathing is difficult in the mornings. Ward 27.',
+   655→    summaryEn: 'Morning smoke from Borivali East estate makes breathing hard',
+   656→    category: 'Pollution', urgency: 4, ward: 'Ward 27', location: 'Borivali East industrial estate',
+   657→    source: 'WhatsApp', submittedBy: 'Vaishali Mhatre', minutesAgo: 620,
+   658→  },
+   659→  {
+   660→    id: 'mc-017', issueId: 'mum-air-27',
+   661→    textOriginal: 'Thick smoke from the Borivali East industrial belt every morning (Ward 27). My son\'s asthma has worsened this month.',
+   662→    language: 'English',
+   663→    translationEn: 'Thick smoke from the Borivali East industrial belt every morning (Ward 27). My son\'s asthma has worsened this month.',
+   664→    summaryEn: 'Daily morning smoke in Ward 27; child asthma worsening',
+   665→    category: 'Pollution', urgency: 4, ward: 'Ward 27', location: 'Borivali East industrial estate',
+   666→    source: 'App', submittedBy: 'Nikhil Rane', minutesAgo: 430,
+   667→  },
+   668→  {
+   669→    id: 'mc-018', issueId: 'mum-air-27',
+   670→    textOriginal: 'वॉर्ड 27 बोरिवली पूर्व के औद्योगिक इलाके से धुआं घुसता है। आंखों में जलन रहती है।',
+   671→    language: 'Hindi',
+   672→    translationEn: 'Smoke drifts in from the industrial area of Borivali East, Ward 27. Our eyes burn constantly.',
+   673→    summaryEn: 'Industrial smoke in Ward 27 causing constant eye irritation',
+   674→    category: 'Pollution', urgency: 4, ward: 'Ward 27', location: 'Borivali East industrial estate',
+   675→    source: 'Phone', submittedBy: 'Javed Khan', minutesAgo: 260,
+   676→  },
+   677→
+   678→  // ── Templated footpath campaign, Ward 22 — 4 "different citizens", identical text ──
+   679→  {
+   680→    id: 'mc-019', issueId: 'mum-spam-22',
+   681→    textOriginal: MUMBAI_SPAM_TEMPLATE,
+   682→    language: 'Marathi',
+   683→    translationEn: 'Respected Sir, please repair the S V Road Malad (Ward 22) footpath immediately. Pedestrians are suffering greatly. Please sanction funds immediately.',
+   684→    summaryEn: 'Templated appeal: repair S V Road Malad footpath immediately',
+   685→    category: 'Roads', urgency: 4, ward: 'Ward 22', location: 'S V Road footpath, Malad West',
+   686→    source: 'WhatsApp', submittedBy: 'Rajesh Mody', minutesAgo: 38,
+   687→  },
+   688→  {
+   689→    id: 'mc-020', issueId: 'mum-spam-22',
+   690→    textOriginal: MUMBAI_SPAM_TEMPLATE,
+   691→    language: 'Marathi',
+   692→    translationEn: 'Respected Sir, please repair the S V Road Malad (Ward 22) footpath immediately. Pedestrians are suffering greatly. Please sanction funds immediately.',
+   693→    summaryEn: 'Templated appeal: repair S V Road Malad footpath immediately',
+   694→    category: 'Roads', urgency: 4, ward: 'Ward 22', location: 'S V Road footpath, Malad West',
+   695→    source: 'WhatsApp', submittedBy: 'Kiran Bhatia', minutesAgo: 29,
+   696→  },
+   697→  {
+   698→    id: 'mc-021', issueId: 'mum-spam-22',
+   699→    textOriginal: MUMBAI_SPAM_TEMPLATE,
+   700→    language: 'Marathi',
+   701→    translationEn: 'Respected Sir, please repair the S V Road Malad (Ward 22) footpath immediately. Pedestrians are suffering greatly. Please sanction funds immediately.',
+   702→    summaryEn: 'Templated appeal: repair S V Road Malad footpath immediately',
+   703→    category: 'Roads', urgency: 4, ward: 'Ward 22', location: 'S V Road footpath, Malad West',
+   704→    source: 'App', submittedBy: 'Deepak Sampat', minutesAgo: 21,
+   705→  },
+   706→  {
+   707→    id: 'mc-022', issueId: 'mum-spam-22',
+   708→    textOriginal: MUMBAI_SPAM_TEMPLATE,
+   709→    language: 'Marathi',
+   710→    translationEn: 'Respected Sir, please repair the S V Road Malad (Ward 22) footpath immediately. Pedestrians are suffering greatly. Please sanction funds immediately.',
+   711→    summaryEn: 'Templated appeal: repair S V Road Malad footpath immediately',
+   712→    category: 'Roads', urgency: 4, ward: 'Ward 22', location: 'S V Road footpath, Malad West',
+   713→    source: 'WhatsApp', submittedBy: 'Farida Bootwala', minutesAgo: 12,
+   714→  },
+   715→];
+   716→
+   717→const MUMBAI_MPLADS: MpladsRecord[] = [
+   718→  {
+   719→    id: 'mum-mpl-01', workName: 'Pre-monsoon desilting of SV Road underpass drains, Malad West',
+   720→    ward: 'Ward 21', category: 'Drainage', amountLakh: 12,
+   721→    sanctionDate: '2026-04-10', completionDate: '2026-06-28', status: 'Completed',
+   722→    implementingAgency: 'BMC Storm Water Drains Department',
+   723→  },
+   724→  {
+   725→    id: 'mum-mpl-02', workName: 'Auto-tipper garbage vehicle, Dahisar market zone',
+   726→    ward: 'Ward 3', category: 'Sanitation', amountLakh: 6,
+   727→    sanctionDate: '2026-06-01', completionDate: '2026-08-15', status: 'Completed',
+   728→    implementingAgency: 'BMC Solid Waste Management Department',
+   729→  },
+   730→  {
+   731→    id: 'mum-mpl-03', workName: 'LED streetlight repairs, Kandivali West lanes',
+   732→    ward: 'Ward 14', category: 'Electricity', amountLakh: 9,
+   733→    sanctionDate: '2026-05-05', status: 'Ongoing',
+   734→    implementingAgency: 'BMC Street Lighting Department',
+   735→  },
+   736→  {
+   737→    id: 'mum-mpl-04', workName: 'Ambient air-quality monitoring stations, Borivali East',
+   738→    ward: 'Ward 27', category: 'Pollution', amountLakh: 35,
+   739→    sanctionDate: '2026-08-20', status: 'Sanctioned – not started',
+   740→    implementingAgency: 'Maharashtra Pollution Control Board',
+   741→  },
+   742→];
+   743→
+   744→const MUMBAI_LIVE_POOL: LivePoolItem[] = [
+   745→  // disputed waterlogging — "reports since completion" keeps climbing
+   746→  {
+   747→    text: 'मलाड अंडरपास आजही पाण्याखाली. वॉर्ड २१.',
+   748→    source: 'Phone', submittedBy: 'Deepak Tandel',
+   749→  },
+   750→  {
+   751→    text: 'वॉर्ड 21 अंडरपास में आज फिर पानी भर गया। ऑफिस टाइम में एक घंटा जाम।',
+   752→    source: 'WhatsApp', submittedBy: 'Rehan Qureshi',
+   753→  },
+   754→  // streetlight cluster grows 4 → 5
+   755→  {
+   756→    text: 'Kandivali West lane 4 ki lights ab bhi band hain. Ward 14.',
+   757→    source: 'WhatsApp', submittedBy: 'Pooja Mistry',
+   758→  },
+   759→  // air-quality cluster grows 3 → 4
+   760→  {
+   761→    text: 'आज सकाळी पुन्हा धुराचा थैमान. बोरिवली पूर्व वॉर्ड २७.',
+   762→    source: 'WhatsApp', submittedBy: 'Chandrakant Pawar',
+   763→  },
+   764→  // the campaign keeps pushing — two more identical appeals from fresh accounts
+   765→  {
+   766→    text: MUMBAI_SPAM_TEMPLATE,
+   767→    source: 'WhatsApp', submittedBy: 'Manish Mehta',
+   768→  },
+   769→  // NEW ISSUE — open manhole, unfunded (shows not everything has a fund record)
+   770→  {
+   771→    text: 'There is an open manhole with a broken cover on New Link Road near the metro pillar, Ward 18. School kids walk past it every single day.',
+   772→    source: 'App', submittedBy: 'Sneha Kadam',
+   773→  },
+   774→  {
+   775→    text: MUMBAI_SPAM_TEMPLATE,
+   776→    source: 'WhatsApp', submittedBy: 'Bhavesh Shah',
+   777→  },
+   778→  // waterlogging again — closing beat
+   779→  {
+   780→    text: 'Malad underpass closed again due to flooding — third time this month. Ward 21.',
+   781→    source: 'App', submittedBy: 'Alok Pandey',
+   782→  },
+   783→];
+   784→
+   785→// ═══════════════════════════════════════════════════════════════════════════
+   786→
+   787→export const CONSTITUENCY_SEEDS: Record<string, ConstituencySeed> = {
+   788→  nagpur: {
+   789→    submitters: NAGPUR_SUBMITTERS,
+   790→    issues: NAGPUR_ISSUES,
+   791→    complaints: NAGPUR_COMPLAINTS,
+   792→    mplads: NAGPUR_MPLADS,
+   793→    livePool: NAGPUR_LIVE_POOL,
+   794→  },
+   795→  'mumbai-north': {
+   796→    submitters: MUMBAI_SUBMITTERS,
+   797→    issues: MUMBAI_ISSUES,
+   798→    complaints: MUMBAI_COMPLAINTS,
+   799→    mplads: MUMBAI_MPLADS,
+   800→    livePool: MUMBAI_LIVE_POOL,
+   801→  },
+   802→};
+   803→

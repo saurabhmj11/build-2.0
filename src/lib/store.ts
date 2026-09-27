@@ -257,7 +257,12 @@ function computeDispute(
   return { disputed: false, disputeReason: null, reportsSinceCompletion: after.length };
 }
 
-function computeFundSummary(issues: IssueView[], records: MpladsRecord[]): FundSummary {
+function computeFundSummary(
+  issues: IssueView[],
+  records: MpladsRecord[],
+  constituencyId: string,
+): FundSummary {
+  const seed = CONSTITUENCY_SEEDS[constituencyId];
   const sanctionedLakh = records.reduce((s, r) => s + r.amountLakh, 0);
   // The accountability punchline: sanctioned money tied to issues that are
   // STILL open on the ground (disputed completions count as still-open).
@@ -265,6 +270,19 @@ function computeFundSummary(issues: IssueView[], records: MpladsRecord[]): FundS
     (i) => i.mplads && (i.mplads.status !== 'Completed' || i.disputed),
   );
   const tiedLakh = tied.reduce((s, i) => s + (i.mplads?.amountLakh ?? 0), 0);
+
+  // ── Module 6 — fund utilisation & work-quality arithmetic ──
+  const tranches = seed.fundTranches;
+  const receivedLakh = tranches.reduce((s, t) => s + t.amountLakh, 0);
+  const linkedSpentLakh = records.reduce((s, r) => s + (r.spentLakh ?? 0), 0);
+  const other = seed.otherWorks;
+  const spentLakh = Math.round((linkedSpentLakh + other.spentLakh) * 10) / 10;
+  const totalSanctionedLakh = sanctionedLakh + other.sanctionedLakh;
+  const rated = records.filter((r) => r.quality);
+  const avgQuality = rated.length
+    ? Math.round((rated.reduce((s, r) => s + (r.quality?.composite ?? 0), 0) / rated.length) * 10) / 10
+    : null;
+
   return {
     entitlementLakh: MPLADS_ENTITLEMENT_LAKH,
     sanctionedLakh,
@@ -272,6 +290,21 @@ function computeFundSummary(issues: IssueView[], records: MpladsRecord[]): FundS
     matchedWorksCount: issues.filter((i) => i.mplads).length,
     totalWorksCount: records.length,
     delayedWorksCount: records.filter((r) => r.status === 'Delayed').length,
+    // Module 6
+    tranches,
+    receivedLakh,
+    totalSanctionedLakh,
+    spentLakh,
+    linkedSpentLakh: Math.round(linkedSpentLakh * 10) / 10,
+    balanceLakh: Math.round((receivedLakh - spentLakh) * 10) / 10,
+    uncommittedLakh: Math.round((receivedLakh - totalSanctionedLakh) * 10) / 10,
+    utilizationPct: receivedLakh > 0 ? Math.round((spentLakh / receivedLakh) * 1000) / 10 : 0,
+    otherWorks: other,
+    allWorksCount: records.length + other.worksCount,
+    allCompletedCount:
+      records.filter((r) => r.status === 'Completed').length + other.completedCount,
+    avgQuality,
+    qualityAlertsCount: rated.filter((r) => r.quality!.band === 'Poor').length,
   };
 }
 
@@ -416,7 +449,8 @@ export function getDashboardState(constituencyId: string): DashboardState {
     constituency: constituencyMeta(constituencyId),
     complaints: complaintsDesc,
     issues: issueViews,
-    fundSummary: computeFundSummary(issueViews, records),
+    fundSummary: computeFundSummary(issueViews, records, constituencyId),
+    mpladsWorks: records,
     verificationSummary,
     wardStats,
     livePoolRemaining: CONSTITUENCY_SEEDS[constituencyId].livePool.length - store.livePoolIndex,

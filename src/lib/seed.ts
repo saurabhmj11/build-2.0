@@ -1,11 +1,16 @@
 import {
   Category,
+  FundTranche,
   Issue,
   MpladsRecord,
+  OtherWorksSummary,
+  compositeQuality,
   ProfileSource,
+  qualityBandOf,
   Source,
   SubmitterProfile,
   Urgency,
+  WorkQuality,
 } from './types';
 
 /**
@@ -53,6 +58,26 @@ export interface ConstituencySeed {
   complaints: SeedComplaintSpec[];
   mplads: MpladsRecord[];
   livePool: LivePoolItem[];
+  /** Module 6 — GoI releases into the constituency MPLADS account */
+  fundTranches: FundTranche[];
+  /** Module 6 — works with no open complaint (aggregate context) */
+  otherWorks: OtherWorksSummary;
+}
+
+/** Module 6 — build a rating with the composite math kept in one place. */
+function workQuality(
+  citizenRating: number,
+  citizenResponses: number,
+  inspectionScore: number,
+): WorkQuality {
+  const composite = compositeQuality(citizenRating, inspectionScore);
+  return {
+    citizenRating,
+    citizenResponses,
+    inspectionScore,
+    composite,
+    band: qualityBandOf(composite),
+  };
 }
 
 /** MPLADS entitlement: ₹5 crore per MP per year */
@@ -392,32 +417,63 @@ const NAGPUR_MPLADS: MpladsRecord[] = [
     ward: 'Ward 12', category: 'Roads', amountLakh: 12,
     sanctionDate: '2026-02-14', status: 'Delayed',
     implementingAgency: 'Nagpur Municipal Corporation — Roads Division',
+    spentLakh: 4.2, progressPct: 35,
   },
   {
     id: 'ngp-mpl-02', workName: 'New borewell + distribution pipeline, Hudkeshwar',
     ward: 'Ward 5', category: 'Water', amountLakh: 25,
     sanctionDate: '2025-11-20', status: 'Ongoing',
     implementingAgency: 'Public Health Engineering Dept / NMC Water Works',
+    spentLakh: 16.5, progressPct: 65,
   },
   {
     id: 'ngp-mpl-03', workName: 'Koradi internal road repair (temple stretch)',
     ward: 'Ward 8', category: 'Roads', amountLakh: 22,
     sanctionDate: '2025-09-05', completionDate: '2026-06-10', status: 'Completed',
     implementingAgency: 'NMC Roads Division',
+    spentLakh: 22, progressPct: 100,
+    // Rated by the very citizens who reported the issue — 14 of them say the
+    // repair is already failing; the engineer audit is barely kinder. This
+    // rating CORROBORATES the Module 4b dispute flag on the same work.
+    quality: workQuality(1.8, 14, 2.4), // composite 2.0 — Poor → quality alert
   },
   {
     id: 'ngp-mpl-04', workName: 'Primary Health Centre Ward 9 — upgrade incl. medicine storage',
     ward: 'Ward 9', category: 'Health', amountLakh: 28,
     sanctionDate: '2025-12-05', status: 'Delayed',
     implementingAgency: 'District Health Society',
+    spentLakh: 11.2, progressPct: 40,
   },
   {
     id: 'ngp-mpl-05', workName: 'LED streetlight retrofit, Ward 3 lanes',
     ward: 'Ward 3', category: 'Electricity', amountLakh: 8,
     sanctionDate: '2026-07-01', status: 'Sanctioned – not started',
     implementingAgency: 'NMC Electrical Division',
+    spentLakh: 0, progressPct: 0,
   },
 ];
+
+/** Module 6 — GoI releases into the Nagpur MPLADS account (₹5 Cr/yr entitlement,
+ *  released in two ₹2.5 Cr tranches per FY by MoSPI). */
+const NAGPUR_FUND_TRANCHES: FundTranche[] = [
+  { id: 'ngp-tr-1', label: 'MPLADS FY 2025-26 — Tranche 1', date: '2025-08-14', amountLakh: 250 },
+  { id: 'ngp-tr-2', label: 'MPLADS FY 2025-26 — Tranche 2', date: '2026-02-19', amountLakh: 250 },
+  { id: 'ngp-tr-3', label: 'MPLADS FY 2026-27 — Tranche 1', date: '2026-05-12', amountLakh: 250 },
+];
+
+/** Module 6 — the constituency's OTHER works (no open complaints): aggregate. */
+const NAGPUR_OTHER_WORKS: OtherWorksSummary = {
+  worksCount: 23,
+  completedCount: 15,
+  sanctionedLakh: 412,
+  spentLakh: 305.4,
+  avgQuality: 3.8,
+  examples: [
+    'ZP school classrooms, Ward 6',
+    'Community hall repair, Ward 2',
+    'Anganwadi solar roofing, Ward 10',
+  ],
+};
 
 const NAGPUR_LIVE_POOL: LivePoolItem[] = [
   // pothole cluster grows 6 → 9 (the clustering moment)
@@ -720,26 +776,56 @@ const MUMBAI_MPLADS: MpladsRecord[] = [
     ward: 'Ward 21', category: 'Drainage', amountLakh: 12,
     sanctionDate: '2026-04-10', completionDate: '2026-06-28', status: 'Completed',
     implementingAgency: 'BMC Storm Water Drains Department',
+    spentLakh: 12, progressPct: 100,
+    // 23 citizens rated after the recorded completion — the underpass still
+    // floods. Corroborates the dispute flag (8+ reports since completion).
+    quality: workQuality(1.6, 23, 2.2), // composite 1.8 — Poor → quality alert
   },
   {
     id: 'mum-mpl-02', workName: 'Auto-tipper garbage vehicle, Dahisar market zone',
     ward: 'Ward 3', category: 'Sanitation', amountLakh: 6,
     sanctionDate: '2026-06-01', completionDate: '2026-08-15', status: 'Completed',
     implementingAgency: 'BMC Solid Waste Management Department',
+    spentLakh: 5.7, progressPct: 100,
+    // The clean contrast: citizens rate it well AND zero complaints since.
+    quality: workQuality(4.6, 11, 4.4), // composite 4.5 — Good
   },
   {
     id: 'mum-mpl-03', workName: 'LED streetlight repairs, Kandivali West lanes',
     ward: 'Ward 14', category: 'Electricity', amountLakh: 9,
     sanctionDate: '2026-05-05', status: 'Ongoing',
     implementingAgency: 'BMC Street Lighting Department',
+    spentLakh: 5.4, progressPct: 60,
   },
   {
     id: 'mum-mpl-04', workName: 'Ambient air-quality monitoring stations, Borivali East',
     ward: 'Ward 27', category: 'Pollution', amountLakh: 35,
     sanctionDate: '2026-08-20', status: 'Sanctioned – not started',
     implementingAgency: 'Maharashtra Pollution Control Board',
+    spentLakh: 0, progressPct: 0,
   },
 ];
+
+/** Module 6 — GoI releases into the Mumbai North MPLADS account. */
+const MUMBAI_FUND_TRANCHES: FundTranche[] = [
+  { id: 'mum-tr-1', label: 'MPLADS FY 2025-26 — Tranche 1', date: '2025-08-21', amountLakh: 250 },
+  { id: 'mum-tr-2', label: 'MPLADS FY 2025-26 — Tranche 2', date: '2026-02-25', amountLakh: 250 },
+  { id: 'mum-tr-3', label: 'MPLADS FY 2026-27 — Tranche 1', date: '2026-05-15', amountLakh: 250 },
+];
+
+/** Module 6 — metro constituency: many small works, none with open complaints. */
+const MUMBAI_OTHER_WORKS: OtherWorksSummary = {
+  worksCount: 31,
+  completedCount: 22,
+  sanctionedLakh: 396,
+  spentLakh: 287.5,
+  avgQuality: 3.9,
+  examples: [
+    'Municipal school toilet block, Ward 8',
+    'Traffic signal modernisation, Ward 19',
+    'Garden walking track, Ward 24',
+  ],
+};
 
 const MUMBAI_LIVE_POOL: LivePoolItem[] = [
   // disputed waterlogging — "reports since completion" keeps climbing
@@ -791,6 +877,8 @@ export const CONSTITUENCY_SEEDS: Record<string, ConstituencySeed> = {
     complaints: NAGPUR_COMPLAINTS,
     mplads: NAGPUR_MPLADS,
     livePool: NAGPUR_LIVE_POOL,
+    fundTranches: NAGPUR_FUND_TRANCHES,
+    otherWorks: NAGPUR_OTHER_WORKS,
   },
   'mumbai-north': {
     submitters: MUMBAI_SUBMITTERS,
@@ -798,5 +886,7 @@ export const CONSTITUENCY_SEEDS: Record<string, ConstituencySeed> = {
     complaints: MUMBAI_COMPLAINTS,
     mplads: MUMBAI_MPLADS,
     livePool: MUMBAI_LIVE_POOL,
+    fundTranches: MUMBAI_FUND_TRANCHES,
+    otherWorks: MUMBAI_OTHER_WORKS,
   },
 };

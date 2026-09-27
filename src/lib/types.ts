@@ -36,6 +36,69 @@ export type Source = 'WhatsApp' | 'Phone' | 'Letter' | 'Walk-in' | 'App' | 'Voic
 
 export type MpladsStatus = 'Completed' | 'Ongoing' | 'Delayed' | 'Sanctioned – not started';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Module 6 — Fund Utilisation & Work Quality ledger
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Quality band for a COMPLETED work: composite ≥4 Good · 3–3.9 Satisfactory · <3 Poor. */
+export type QualityBand = 'Good' | 'Satisfactory' | 'Poor';
+
+/** Composite quality = 60% citizen rating + 40% third-party inspection (1–5). */
+export function compositeQuality(citizen: number, inspection: number): number {
+  return Math.round((0.6 * citizen + 0.4 * inspection) * 10) / 10;
+}
+
+export function qualityBandOf(composite: number): QualityBand {
+  if (composite >= 4) return 'Good';
+  if (composite >= 3) return 'Satisfactory';
+  return 'Poor';
+}
+
+/**
+ * Module 6 — post-completion quality rating for a completed work.
+ * Citizen side: one rating per phone-verified citizen (linked complainants +
+ * nearby residents, SMS survey after recorded completion) — same one-citizen-
+ * one-vote discipline as Module 4a, so brigading cannot inflate it.
+ * Official side: mandatory third-party engineer inspection for works > ₹10L.
+ */
+export interface WorkQuality {
+  /** mean of distinct-citizen ratings, 1–5 */
+  citizenRating: number;
+  /** how many distinct phone-verified citizens rated */
+  citizenResponses: number;
+  /** third-party engineer audit, 1–5 */
+  inspectionScore: number;
+  /** 0.6 × citizen + 0.4 × inspection */
+  composite: number;
+  band: QualityBand;
+}
+
+/** Module 6 — one GoI release into the constituency MPLADS account. */
+export interface FundTranche {
+  id: string;
+  /** e.g. "MPLADS FY 2025-26 — Tranche 1" */
+  label: string;
+  /** release date */
+  date: string;
+  amountLakh: number;
+}
+
+/**
+ * Module 6 — MPLADS works with NO open citizen complaint, shown in aggregate
+ * only (the dashboard tracks the complaint-linked slice in detail). Keeps the
+ * fund arithmetic honest without drowning the demo in unrelated works.
+ */
+export interface OtherWorksSummary {
+  worksCount: number;
+  completedCount: number;
+  sanctionedLakh: number;
+  spentLakh: number;
+  /** mean composite of rated completions in this aggregate */
+  avgQuality: number | null;
+  /** a few example work names (tooltip flavour) */
+  examples: string[];
+}
+
 export interface Complaint {
   id: string;
   /** mock phone-verified identity (per ARCHITECTURE.md 4a) — same id = same citizen */
@@ -70,6 +133,12 @@ export interface MpladsRecord {
   completionDate?: string;
   status: MpladsStatus;
   implementingAgency: string;
+  /** Module 6 — amount actually utilised/drawn so far (₹ lakh) */
+  spentLakh?: number;
+  /** Module 6 — physical progress on the ground, 0–100 */
+  progressPct?: number;
+  /** Module 6 — post-completion rating (completed works only) */
+  quality?: WorkQuality;
 }
 
 export interface Issue {
@@ -165,6 +234,32 @@ export interface FundSummary {
   matchedWorksCount: number;
   totalWorksCount: number;
   delayedWorksCount: number;
+  // ── Module 6 — the full fund utilisation & work-quality picture ──
+  /** GoI releases into the MPLADS account, chronologically */
+  tranches: FundTranche[];
+  /** total received from the government across tranches */
+  receivedLakh: number;
+  /** sanctioned across ALL works (complaint-linked + other) */
+  totalSanctionedLakh: number;
+  /** utilised across ALL works (money actually drawn) */
+  spentLakh: number;
+  /** utilised on the complaint-linked works this dashboard tracks */
+  linkedSpentLakh: number;
+  /** received − spent (unspent cash in the account) */
+  balanceLakh: number;
+  /** received − total sanctioned (not yet committed to any work) */
+  uncommittedLakh: number;
+  /** spent ÷ received × 100 */
+  utilizationPct: number;
+  /** works with no open complaint — aggregate only */
+  otherWorks: OtherWorksSummary;
+  /** ALL works in the constituency (linked + other) */
+  allWorksCount: number;
+  allCompletedCount: number;
+  /** mean composite over RATED linked works (null if none rated yet) */
+  avgQuality: number | null;
+  /** linked completions rated Poor → quality alerts */
+  qualityAlertsCount: number;
 }
 
 export interface WardStat {
@@ -180,6 +275,8 @@ export interface DashboardState {
   complaints: Complaint[];
   issues: IssueView[];
   fundSummary: FundSummary;
+  /** Module 6 — the tracked (complaint-linked) works ledger, full detail */
+  mpladsWorks: MpladsRecord[];
   verificationSummary: VerificationSummary;
   wardStats: WardStat[];
   livePoolRemaining: number;

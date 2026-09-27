@@ -23,6 +23,14 @@ interface ReportDialogProps {
 }
 
 function reportToPlainText(r: Report, issue: IssueView): string {
+  const mpl = issue.mplads;
+  const qualityLine = mpl?.quality
+    ? `Post-completion quality : citizen ${mpl.quality.citizenRating.toFixed(1)}/5 (${mpl.quality.citizenResponses} raters) · inspection ${mpl.quality.inspectionScore.toFixed(1)}/5 · composite ${mpl.quality.composite.toFixed(1)}/5 — ${mpl.quality.band.toUpperCase()}`
+    : null;
+  const spendLine =
+    mpl && mpl.status !== 'Completed' && mpl.progressPct !== undefined
+      ? `Fund utilisation       : ₹${mpl.spentLakh ?? 0}L drawn of ₹${mpl.amountLakh}L · ${mpl.progressPct}% physical progress`
+      : null;
   const lines = [
     `CITIZENPULSE — DEPARTMENT ACTION REPORT`,
     `=${'='.repeat(50)}`,
@@ -49,6 +57,16 @@ function reportToPlainText(r: Report, issue: IssueView): string {
     r.budgetReasoning ? `Reasoning : ${r.budgetReasoning}` : ``,
     ``,
   ].filter((l) => l !== undefined);
+  if (qualityLine) {
+    lines.push(
+      `POST-COMPLETION QUALITY (60% citizens · 40% inspection)`,
+      qualityLine,
+      ``,
+    );
+  }
+  if (spendLine) {
+    lines.push(`FUND UTILISATION`, spendLine, ``);
+  }
   if (r.rtiApplication) {
     lines.push(
       `RTI APPLICATION (ready to send)`,
@@ -115,6 +133,13 @@ export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDial
   };
 
   const mpl = issue.mplads;
+  const qualityLine = mpl?.quality
+    ? `Post-completion quality : citizen ${mpl.quality.citizenRating.toFixed(1)}/5 (${mpl.quality.citizenResponses} raters) · inspection ${mpl.quality.inspectionScore.toFixed(1)}/5 · composite ${mpl.quality.composite.toFixed(1)}/5 — ${mpl.quality.band.toUpperCase()}`
+    : null;
+  const spendLine =
+    mpl && mpl.status !== 'Completed' && mpl.progressPct !== undefined
+      ? `Fund utilisation       : ₹${mpl.spentLakh ?? 0}L drawn of ₹${mpl.amountLakh}L · ${mpl.progressPct}% physical progress`
+      : null;
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -200,25 +225,63 @@ export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDial
 
                   {/* 2 — MPLADS fund status line */}
                   {issue.disputed && mpl ? (
-                    <p
-                      className="rounded-md px-3 py-2 text-[13px] font-semibold"
-                      style={{ backgroundColor: '#B91C4A14', color: '#9F1239' }}
-                    >
-                      🚩 DISPUTED COMPLETION — sanctioned ₹{mpl.amountLakh}L on{' '}
-                      {shortDate(mpl.sanctionDate)}, recorded complete{' '}
-                      {shortDate(mpl.completionDate!)} — but{' '}
-                      {issue.reportsSinceCompletion} reports since say otherwise.
-                      Physical verification recommended.
-                    </p>
+                    <>
+                      <p
+                        className="rounded-md px-3 py-2 text-[13px] font-semibold"
+                        style={{ backgroundColor: '#B91C4A14', color: '#9F1239' }}
+                      >
+                        🚩 DISPUTED COMPLETION — sanctioned ₹{mpl.amountLakh}L on{' '}
+                        {shortDate(mpl.sanctionDate)}, recorded complete{' '}
+                        {shortDate(mpl.completionDate!)} — but{' '}
+                        {issue.reportsSinceCompletion} reports since say otherwise.
+                        Physical verification recommended.
+                      </p>
+                      {mpl.quality && (
+                        <p
+                          className="-mt-2 ml-2 mr-2 rounded-b-md border border-t-0 px-3 py-1.5 text-xs font-semibold"
+                          style={{
+                            borderColor: '#B91C4A40',
+                            backgroundColor: '#B91C4A0A',
+                            color: '#9F1239',
+                          }}
+                        >
+                          ⭐ Work rated{' '}
+                          <b>
+                            {mpl.quality.composite.toFixed(1)}/5 ({mpl.quality.band})
+                          </b>{' '}
+                          — {mpl.quality.citizenResponses} citizens rate it{' '}
+                          {mpl.quality.citizenRating.toFixed(1)}/5, inspection{' '}
+                          {mpl.quality.inspectionScore.toFixed(1)}/5. The rating
+                          corroborates the dispute.
+                        </p>
+                      )}
+                    </>
                   ) : mpl ? (
-                    <p className="rounded-md bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900 ring-1 ring-amber-200">
-                      ⚠️ Sanctioned ₹{mpl.amountLakh}L on {shortDate(mpl.sanctionDate)} —
-                      status: {mpl.status.toUpperCase()}
-                      {mpl.completionDate
-                        ? ` (completed ${shortDate(mpl.completionDate)})`
-                        : ''}{' '}
-                      · “{mpl.workName}” · {mpl.implementingAgency}
-                    </p>
+                    <>
+                      <p className="rounded-md bg-amber-50 px-3 py-2 text-[13px] font-semibold text-amber-900 ring-1 ring-amber-200">
+                        ⚠️ Sanctioned ₹{mpl.amountLakh}L on {shortDate(mpl.sanctionDate)} —
+                        status: {mpl.status.toUpperCase()}
+                        {mpl.completionDate
+                          ? ` (completed ${shortDate(mpl.completionDate)})`
+                          : ''}{' '}
+                        · “{mpl.workName}” · {mpl.implementingAgency}
+                      </p>
+                      {spendLine && (
+                        <p className="-mt-2 ml-2 mr-2 rounded-b-md border border-t-0 border-amber-200 bg-amber-50/60 px-3 py-1.5 font-mono text-[11px] font-semibold text-amber-900">
+                          {spendLine}
+                        </p>
+                      )}
+                      {mpl.quality && (
+                        <p className="-mt-2 ml-2 mr-2 rounded-b-md border border-t-0 border-emerald-300 bg-emerald-50/70 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+                          ⭐ Work rated <b>{mpl.quality.composite.toFixed(1)}/5</b> —{' '}
+                          {mpl.quality.citizenResponses} citizens{' '}
+                          {mpl.quality.citizenResponses === 1 ? 'rate' : 'rates'} it{' '}
+                          {mpl.quality.citizenRating.toFixed(1)}/5 · inspection{' '}
+                          {mpl.quality.inspectionScore.toFixed(1)}/5. Quality consistent
+                          with ground reports.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="rounded-md bg-gray-100 px-3 py-2 text-[13px] font-medium text-gray-600">
                       No sanctioned MPLADS work found — a fresh budget line is the

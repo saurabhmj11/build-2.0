@@ -204,6 +204,22 @@ export function IssueCard({
                 Sanctioned ₹{mpl.amountLakh}L on {shortDate(mpl.sanctionDate)} · “
                 {mpl.workName}” · {mpl.implementingAgency}
               </p>
+              {mpl.quality && (
+                <p
+                  className="mt-1 flex flex-wrap items-center gap-1.5 rounded-md bg-red-950/50 px-2 py-1 font-semibold"
+                  style={{ color: '#F87171' }}
+                  title="Post-completion rating: 60% phone-verified citizen ratings + 40% third-party engineer inspection"
+                >
+                  ⭐ Rated {mpl.quality.composite.toFixed(1)}/5 ({mpl.quality.band}) —
+                  {mpl.quality.citizenResponses} citizens{' '}
+                  {mpl.quality.citizenResponses === 1 ? 'rates' : 'rate'} it{' '}
+                  {mpl.quality.citizenRating.toFixed(1)}/5 · inspection{' '}
+                  {mpl.quality.inspectionScore.toFixed(1)}/5
+                  <span className="font-bold text-red-300">
+                    — corroborates the dispute
+                  </span>
+                </p>
+              )}
               <p className="mt-0.5 font-medium" style={{ color: '#f472a0' }}>
                 → Official record vs. ground reports mismatch — physical
                 verification recommended. Not hidden as “resolved”.
@@ -230,6 +246,41 @@ export function IssueCard({
               <p className="mt-1 text-gray-400">
                 “{mpl.workName}” · {mpl.implementingAgency}
               </p>
+              {/* Module 6 — fund drawn + physical progress on the ground */}
+              {mpl.status !== 'Completed' && mpl.progressPct !== undefined && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-gray-400">
+                  <span>
+                    ₹{mpl.spentLakh ?? 0}L drawn of ₹{mpl.amountLakh}L
+                  </span>
+                  <span className="h-1.5 w-24 overflow-hidden rounded-full bg-[#111827]">
+                    <span
+                      className="block h-full rounded-full bg-emerald-600"
+                      style={{ width: `${Math.min(100, ((mpl.spentLakh ?? 0) / mpl.amountLakh) * 100)}%` }}
+                    />
+                  </span>
+                  <span>
+                    {mpl.progressPct}% done on the ground
+                    {mpl.status === 'Delayed' && (
+                      <span className="ml-1 font-bold text-orange-400">
+                        — behind schedule
+                      </span>
+                    )}
+                  </span>
+                </p>
+              )}
+              {/* Module 6 — post-completion citizen quality rating (clean case) */}
+              {mpl.status === 'Completed' && mpl.quality && (
+                <p
+                  className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md bg-emerald-950/40 px-2 py-1 text-[11px] font-semibold text-emerald-400"
+                  title="Post-completion rating: 60% phone-verified citizen ratings + 40% third-party engineer inspection"
+                >
+                  ⭐ Rated {mpl.quality.composite.toFixed(1)}/5 ({mpl.quality.band}) —
+                  {mpl.quality.citizenResponses} citizens{' '}
+                  {mpl.quality.citizenResponses === 1 ? 'rates' : 'rate'} it{' '}
+                  {mpl.quality.citizenRating.toFixed(1)}/5 · inspection{' '}
+                  {mpl.quality.inspectionScore.toFixed(1)}/5
+                </p>
+              )}
               <p className="mt-0.5 font-medium text-gray-300">
                 {mpl.status === 'Delayed'
                   ? '→ Unfulfilled sanctioned work: needs follow-up, not new budget.'
