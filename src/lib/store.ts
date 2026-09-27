@@ -5,10 +5,13 @@ import {
   Issue,
   IssueView,
   MpladsRecord,
+  ProfileSource,
+  SubmitterProfile,
   Urgency,
   VerificationFlags,
   VerificationSummary,
 } from './types';
+import { categoryWeight } from './profile';
 import { constituencyMeta } from './constituencies';
 import {
   CONSTITUENCY_SEEDS,
@@ -53,6 +56,10 @@ function seedStore(constituencyId: string): StoreState {
     createdAt: minutesAgoISO(c.minutesAgo),
     issueId: c.issueId,
     aiClassified: false, // historical archive: pre-classified ground truth
+    submitterProfile: c.submitterProfile ?? 'general',
+    profileSource: c.submitterProfile
+      ? (c.profileSource ?? 'declared')
+      : 'default',
   }));
 
   const issues: Issue[] = seed.issues.map((iss) => {
@@ -295,13 +302,43 @@ export function getDashboardState(constituencyId: string): DashboardState {
     // Coordinated campaigns are quarantined from the ranking (rank capped at
     // urgency, pending human review) — ARCHITECTURE.md Module 3.
     const quarantined = verification.coordinationSuspected;
+
+    // Module 5 — occupation profile aggregation over DISTINCT citizens only.
+    // A citizen who ever filed as a farmer is counted as a farmer (one
+    // citizen, one vote — and one occupation signal).
+    const profileById = new Map<string, SubmitterProfile>();
+    for (const c of complaints) {
+      const key = c.submitterId || c.submittedBy.trim().toLowerCase();
+      const cur = profileById.get(key);
+      const p: SubmitterProfile = c.submitterProfile ?? 'general';
+      if (!cur || (cur === 'general' && p === 'farmer')) {
+        profileById.set(key, p);
+      }
+    }
+    const farmerCount = [...profileById.values()].filter((p) => p === 'farmer').length;
+    const generalCount = profileById.size - farmerCount;
+    // Strict majority of distinct reporters decides the weight table.
+    const profile: SubmitterProfile = farmerCount > generalCount ? 'farmer' : 'general';
+    const profileWeight = categoryWeight(profile, issue.category);
+
+    const unweightedPriority =
+      (quarantined ? 1 : verification.distinctSubmitters) * urgency;
+    // The occupation weight is NOT volume-driven, so it applies even to
+    // quarantined clusters (the cap neutralizes count, not the weighting).
+    const priority = Math.round(unweightedPriority * profileWeight * 10) / 10;
+
     return {
       ...issue,
       urgency,
       count,
       distinctCount: verification.distinctSubmitters,
-      priority: (quarantined ? 1 : verification.distinctSubmitters) * urgency,
+      priority,
       rawPriority: count * urgency, // what raw volume alone would have scored
+      unweightedPriority,
+      farmerCount,
+      generalCount,
+      profile,
+      profileWeight,
       verification,
       disputed,
       disputeReason,
@@ -336,6 +373,7 @@ export function getDashboardState(constituencyId: string): DashboardState {
       (i) => i.verification.duplicateSubmitters.length > 0,
     ).length,
     disputedCompletions: issueViews.filter((i) => i.disputed).length,
+    farmerWeighted: issueViews.filter((i) => i.profile === 'farmer').length,
   };
 
   // Ward hotspot stats for the inline SVG map (wards with MPLADS works are
@@ -408,6 +446,9 @@ export interface RegisterComplaintInput {
   aiClassified: boolean;
   /** if the classifier matched an existing issue */
   matchedIssueId: string | null;
+  /** Module 5 — occupation profile (declared or inferred at intake) */
+  submitterProfile: SubmitterProfile;
+  profileSource: ProfileSource;
 }
 
 export function registerComplaint(
@@ -465,6 +506,8 @@ export function registerComplaint(
     createdAt: now,
     issueId: issue.id,
     aiClassified: input.aiClassified,
+    submitterProfile: input.submitterProfile,
+    profileSource: input.profileSource,
   };
   store.complaints.push(complaint);
   if (input.aiClassified) store.aiClassifiedCount += 1;

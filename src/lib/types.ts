@@ -27,6 +27,11 @@ export const CATEGORIES: Category[] = [
 
 export type Urgency = 1 | 2 | 3 | 4 | 5;
 
+/** Module 5 — occupation profile for priority weighting. */
+export type SubmitterProfile = 'general' | 'farmer';
+/** How the profile was captured: intake self-declaration vs text inference. */
+export type ProfileSource = 'declared' | 'inferred' | 'default';
+
 export type Source = 'WhatsApp' | 'Phone' | 'Letter' | 'Walk-in' | 'App' | 'Voice note';
 
 export type MpladsStatus = 'Completed' | 'Ongoing' | 'Delayed' | 'Sanctioned – not started';
@@ -48,6 +53,10 @@ export interface Complaint {
   createdAt: string; // ISO
   issueId: string;
   aiClassified: boolean; // true = processed by live LLM pipeline
+  /** Module 5 — occupation profile ('general' by default) */
+  submitterProfile: SubmitterProfile;
+  /** declared at intake · inferred from complaint text · default (no signal) */
+  profileSource: ProfileSource;
 }
 
 export interface MpladsRecord {
@@ -98,14 +107,28 @@ export interface VerificationSummary {
   coordinationFlagged: number;
   duplicateDeWeighted: number;
   disputedCompletions: number;
+  /** Module 5 — issues whose priority is farmer-weighted */
+  farmerWeighted: number;
 }
 
 export interface IssueView extends Issue {
   count: number;
   /** Module 4a: distinct citizens — the number the ranking actually uses */
   distinctCount: number;
-  priority: number; // distinctSubmitters × urgency (verified)
-  rawPriority: number; // count × urgency (what volume alone would have scored)
+  /** distinct citizens × urgency × occupation weight (verified, weighted) */
+  priority: number;
+  /** count × urgency (what volume alone would have scored) */
+  rawPriority: number;
+  /** distinct × urgency BEFORE the occupation weight — the counterfactual */
+  unweightedPriority: number;
+  /** Module 5 — distinct farmers among the verified reporters */
+  farmerCount: number;
+  /** Module 5 — distinct general citizens among the verified reporters */
+  generalCount: number;
+  /** Module 5 — dominant profile of distinct reporters (strict majority) */
+  profile: SubmitterProfile;
+  /** Module 5 — the multiplier actually applied (profile × category) */
+  profileWeight: number;
   verification: VerificationFlags;
   /** Module 4b: official record says Completed, but ground reports continue */
   disputed: boolean;

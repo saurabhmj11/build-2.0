@@ -90,6 +90,16 @@ const SAMPLES: { label: string; text: string }[] = [
     label: 'English sample',
     text: 'The footbridge at Ward 10 railway crossing has a broken step and rusty railing. School children use it daily, it is very dangerous.',
   },
+  {
+    label: 'Hindi farmer sample',
+    text: 'कालमना मंडी जाने वाला वार्ड 15 का रस्ता कीचड़ से भरा है। मेरी सोयाबीन की फसल ट्रैक्टर-ट्रॉली में लादकर खड़ी है, मंडी नहीं पहुंच रही।',
+  },
+];
+
+const OCCUPATION_OPTIONS = [
+  { value: 'auto', label: 'Auto — infer from my complaint' },
+  { value: 'farmer', label: '🌾 Farmer / कृषी' },
+  { value: 'general', label: 'General citizen' },
 ];
 
 export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }: SubmitDialogProps) {
@@ -97,6 +107,7 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
   const [text, setText] = useState('');
   const [name, setName] = useState('');
   const [channel, setChannel] = useState('WhatsApp');
+  const [occupation, setOccupation] = useState<'auto' | 'farmer' | 'general'>('auto');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceLang, setVoiceLang] = useState('mr-IN');
@@ -186,6 +197,7 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
           submittedBy: name.trim() || 'Anonymous citizen',
           source: channel,
           constituencyId,
+          submitterProfile: occupation === 'auto' ? undefined : occupation,
         }),
       });
       const data = await res.json();
@@ -376,6 +388,39 @@ export function SubmitDialog({ open, constituencyId, onOpenChange, onSubmitted }
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Module 5 — occupation (priority weighting) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-300">
+              Occupation — affects priority weighting
+            </Label>
+            <Select
+              value={occupation}
+              onValueChange={(v) => setOccupation(v as 'auto' | 'farmer' | 'general')}
+              disabled={busy}
+            >
+              <SelectTrigger
+                className="border-[#374151] bg-[#111827] text-sm text-white"
+                aria-label="Occupation"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OCCUPATION_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="rounded-md border border-lime-900/60 bg-lime-950/20 px-2.5 py-1.5 text-[10px] leading-snug text-lime-300/90">
+              🌾 Why we ask: urgency windows differ by occupation. A farmer&apos;s road
+              complaint is harvest transport — income at risk on a seasonal
+              deadline (Roads ×1.4) — while health leads by default for everyone
+              (×1.3). Same complaint, different occupation → different priority.
+              Leave on Auto and the engine infers it from your own words.
+            </p>
           </div>
         </div>
 

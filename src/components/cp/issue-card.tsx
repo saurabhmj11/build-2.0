@@ -9,9 +9,11 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Complaint, IssueView } from '@/lib/types';
+import { categoryWeight, weightRationale } from '@/lib/profile';
 import {
   CATEGORY_STYLE,
   DISPUTED_HEX,
+  formatPriority,
   maskSubmitterId,
   MPLADS_STATUS_LABEL,
   shortDate,
@@ -63,6 +65,10 @@ export function IssueCard({
   const isTop = rank === 1;
   const deWeighted = issue.rawPriority > issue.priority;
   const pct = maxPriority > 0 ? Math.round((issue.priority / maxPriority) * 100) : 0;
+  const isFarmerWeighted = issue.profile === 'farmer' && issue.profileWeight !== 1;
+  const generalWeight = categoryWeight('general', issue.category);
+  const counterfactual =
+    Math.round(issue.unweightedPriority * generalWeight * 10) / 10;
 
   return (
     <article
@@ -89,7 +95,7 @@ export function IssueCard({
               Priority
             </p>
             <p className="text-lg font-extrabold leading-none text-white">
-              {issue.priority}
+              {formatPriority(issue.priority)}
             </p>
           </div>
         </div>
@@ -117,6 +123,14 @@ export function IssueCard({
             >
               Urgency {issue.urgency} · {urg.label}
             </span>
+            {isFarmerWeighted && (
+              <span
+                className="rounded-full border border-lime-700/70 bg-lime-950/40 px-2 py-0.5 text-[10px] font-bold text-lime-400"
+                title={`${issue.farmerCount} of ${issue.distinctCount} distinct complainants are identified farmers (self-declared or inferred from their own words). ${weightRationale('farmer', issue.category)} Unweighted score ${formatPriority(issue.unweightedPriority)} → ${formatPriority(issue.priority)} with the farmer weight (×${issue.profileWeight} vs ×${generalWeight} general). As general reporters this cluster would score ${formatPriority(counterfactual)}.`}
+              >
+                🌾 farmer-weighted ×{issue.profileWeight}
+              </span>
+            )}
             {issue.recentCount > 0 && (
               <span className="rounded-full bg-[#374151] px-2 py-0.5 text-[10px] font-bold text-amber-400">
                 +{issue.recentCount} in last hour
@@ -127,7 +141,7 @@ export function IssueCard({
                 className="rounded-full border border-amber-700/70 bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-400"
                 title="Raw volume would have scored this higher — the verification layer de-weighted it"
               >
-                raw {issue.rawPriority} → verified {issue.priority}
+                raw {formatPriority(issue.rawPriority)} → verified {formatPriority(issue.priority)}
               </span>
             )}
             {issue.quarantined && (
@@ -165,6 +179,8 @@ export function IssueCard({
             <span className="shrink-0 text-[10px] font-medium text-gray-500">
               {issue.quarantined ? 'urgency only' : `${issue.distinctCount} distinct`} ×
               urgency {issue.urgency}
+              {issue.profileWeight !== 1 &&
+                ` × ${issue.profileWeight} (${issue.profile === 'farmer' ? 'farmer' : 'general'})`}
             </span>
           </div>
 
@@ -304,6 +320,18 @@ export function IssueCard({
                       ({maskSubmitterId(c.submitterId)})
                     </span>{' '}
                     · {c.ward} · {c.language}
+                    {c.submitterProfile === 'farmer' && (
+                      <span
+                        className="rounded-sm bg-lime-950/70 px-1 py-px font-bold text-lime-400 ring-1 ring-lime-800"
+                        title={
+                          c.profileSource === 'declared'
+                            ? 'Occupation self-declared at intake'
+                            : 'Occupation inferred from the complaint text'
+                        }
+                      >
+                        🌾 farmer
+                      </span>
+                    )}
                   </span>
                   <time dateTime={c.createdAt}>{timeAgo(c.createdAt)}</time>
                 </div>

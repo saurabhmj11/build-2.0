@@ -2,7 +2,9 @@ import {
   Category,
   Issue,
   MpladsRecord,
+  ProfileSource,
   Source,
+  SubmitterProfile,
   Urgency,
 } from './types';
 
@@ -32,6 +34,10 @@ interface SeedComplaintSpec {
   source: Source;
   submittedBy: string;
   minutesAgo: number;
+  /** Module 5 — occupation profile (absent = general citizen) */
+  submitterProfile?: SubmitterProfile;
+  /** 'declared' at intake or 'inferred' from the text itself */
+  profileSource?: ProfileSource;
 }
 
 export interface LivePoolItem {
@@ -74,6 +80,14 @@ const NAGPUR_SUBMITTERS: Record<string, string> = {
   'Waman Wanarkar': 'PH-90210-4415',
   'Alok Ranjan': 'PH-90210-4416', // ×3 — manipulation cluster
   'Pankaj Verma': 'PH-90210-4417', // ×2 — manipulation cluster
+  // Module 5 — Kalamna mandi farmers (the farmer-weighted cluster)
+  'Bapu Madavi': 'PH-90210-4418',
+  'Kausalya Ghatol': 'PH-90210-4419',
+  // Module 5 — Ward 13 PHC complainants (general citizens)
+  'Sadhana Bhoyar': 'PH-90210-4420',
+  'Iqbal Mansuri': 'PH-90210-4421',
+  'Gajanan Charde': 'PH-90210-4422',
+  'Rekha Bagade': 'PH-90210-4423',
 };
 
 const NAGPUR_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivityAt'>[] = [
@@ -82,7 +96,14 @@ const NAGPUR_ISSUES: Omit<Issue, 'complaintIds' | 'createdAt' | 'lastActivityAt'
   // 4b demo: official record says the Koradi road repair COMPLETED on 10 Jun 2026,
   // yet fresh complaints keep arriving after that date → DISPUTED, not hidden.
   { id: 'ngp-road-8', title: "Koradi internal road broken again after 'completed' repair", category: 'Roads', ward: 'Ward 8', location: 'Koradi internal road, temple stretch', urgency: 4 },
-  { id: 'ngp-mandi-15', title: 'Kalamna mandi approach road unusable for farm produce', category: 'Other', ward: 'Ward 15', location: 'Kalamna market committee approach road', urgency: 3 },
+  // Module 5 demo pair — the occupation-weighted flip:
+  //   Kalamna mandi road (Roads, 4 distinct FARMERS × urgency 4 = 16 unweighted, ×1.4 → 22.4)
+  //   vs Ward 13 PHC (Health, 4 distinct general citizens × urgency 4 = 16, ×1.3 → 20.8).
+  // Identical unweighted scores; the farmer cluster ranks ABOVE the PHC because
+  // its reporters face a harvest-window deadline. Counterfactual on the card:
+  // the same 4 citizens as general reporters → 16 × 1.1 = 17.6 < 20.8 (below the PHC).
+  { id: 'ngp-mandi-15', title: 'Kalamna mandi approach road unusable for farm produce', category: 'Roads', ward: 'Ward 15', location: 'Kalamna market committee approach road', urgency: 4 },
+  { id: 'ngp-health-13', title: 'Besa PHC (Ward 13) without doctor or medicines for three weeks', category: 'Health', ward: 'Ward 13', location: 'Besa Primary Health Centre, Ward 13', urgency: 4 },
   { id: 'ngp-light-3', title: 'Streetlights out for a fortnight, Ward 3 lanes', category: 'Electricity', ward: 'Ward 3', location: 'Residential lanes, Ward 3', urgency: 3 },
   // 4a demo: 5 reports, only 2 distinct submitters, near-identical templated wording.
   // Raw volume scores 20; verified ranking de-weights duplicates AND quarantines
@@ -214,15 +235,16 @@ const NAGPUR_COMPLAINTS: SeedComplaintSpec[] = [
     source: 'Walk-in', submittedBy: 'Suresh Bodile', minutesAgo: 7200, // ~5 days ago
   },
 
-  // ── Kalamna mandi approach road (agri-linked, no MPLADS match) ──
+  // ── Kalamna mandi approach road — the FARMER-weighted cluster (4 distinct farmers) ──
   {
     id: 'nc-014', issueId: 'ngp-mandi-15',
     textOriginal: 'कालमना मंडी का रास्ता कीचड़ से भर गया है। ट्रैक्टर फंस रहे हैं, सब्ज़ी मंडी तक पहुंचानी पड़ती है। वार्ड 15।',
     language: 'Hindi',
     translationEn: 'The Kalamna mandi approach road is full of mud. Tractors are getting stuck; produce has to be carried to the market by hand. Ward 15.',
     summaryEn: 'Kalamna mandi approach road muddy; tractors stuck',
-    category: 'Other', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
+    category: 'Roads', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
     source: 'Phone', submittedBy: 'Kisan Patil', minutesAgo: 900,
+    submitterProfile: 'farmer', profileSource: 'declared',
   },
   {
     id: 'nc-015', issueId: 'ngp-mandi-15',
@@ -230,8 +252,70 @@ const NAGPUR_COMPLAINTS: SeedComplaintSpec[] = [
     language: 'Marathi',
     translationEn: 'Because the Kalamna market committee road is bad, farmers are finding it hard to transport vegetables. Ward 15.',
     summaryEn: 'Farmers struggling to transport produce on Kalamna mandi road',
-    category: 'Other', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
+    category: 'Roads', urgency: 3, ward: 'Ward 15', location: 'Kalamna market approach road',
     source: 'WhatsApp', submittedBy: 'Waman Wanarkar', minutesAgo: 640,
+    submitterProfile: 'farmer', profileSource: 'declared',
+  },
+  // harvest-window texture — urgency 4 lifts the cluster; profile inferred
+  // from the text itself (soybean crop waiting, tractor-trolley stuck)
+  {
+    id: 'nc-023', issueId: 'ngp-mandi-15',
+    textOriginal: 'सोयाबीन की फसल कट गई है, लेकिन कालमना मंडी का रस्ता कीचड़ में डूबा है। ट्रैक्टर-ट्रॉली अटकती है, फसल खेत में पड़ी है। वार्ड 15।',
+    language: 'Hindi',
+    translationEn: 'The soybean crop has been harvested, but the Kalamna mandi road is drowned in mud. Tractor-trolleys keep getting stuck; the crop is lying in the field. Ward 15.',
+    summaryEn: 'Harvested soybean stuck in field — mandi road impassable',
+    category: 'Roads', urgency: 4, ward: 'Ward 15', location: 'Kalamna market approach road',
+    source: 'WhatsApp', submittedBy: 'Bapu Madavi', minutesAgo: 520,
+    submitterProfile: 'farmer', profileSource: 'inferred',
+  },
+  {
+    id: 'nc-024', issueId: 'ngp-mandi-15',
+    textOriginal: 'आत्ता ऊस तोडणीचा हंगाम आहे, पण कळमणा बाजार समितीच्या रस्त्याने गाड्या जात नाहीत. ऊस बागेतच पडलाय. वॉर्ड १५.',
+    language: 'Marathi',
+    translationEn: 'It is sugarcane cutting season now, but vehicles cannot use the Kalamna market committee road. The cane is lying in the field itself. Ward 15.',
+    summaryEn: 'Sugarcane harvest stuck — market committee road unusable',
+    category: 'Roads', urgency: 4, ward: 'Ward 15', location: 'Kalamna market approach road',
+    source: 'Phone', submittedBy: 'Kausalya Ghatol', minutesAgo: 300,
+    submitterProfile: 'farmer', profileSource: 'inferred',
+  },
+
+  // ── Besa PHC Ward 13 — the HEALTH contrast issue (4 distinct general citizens,
+  //    same unweighted 16; no MPLADS match → unfunded) ──
+  {
+    id: 'nc-025', issueId: 'ngp-health-13',
+    textOriginal: 'वॉर्ड १३ बेसा आरोग्य केंद्रात तीन आठवड्यांपासून डॉक्टरच नाही. गरोवरीच्या बायकांना शहरात धाडावे लागते.',
+    language: 'Marathi',
+    translationEn: 'The Besa health centre in Ward 13 has had no doctor for three weeks. Pregnant women are having to be sent to the city.',
+    summaryEn: 'Besa PHC without doctor for three weeks; pregnant women referred out',
+    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+    source: 'WhatsApp', submittedBy: 'Sadhana Bhoyar', minutesAgo: 820,
+  },
+  {
+    id: 'nc-026', issueId: 'ngp-health-13',
+    textOriginal: 'वार्ड 13 के स्वास्थ्य केंद्र में तीन हफ्ते से डॉक्टर नहीं आ रहा। दवाइयां भी नहीं मिलतीं।',
+    language: 'Hindi',
+    translationEn: 'No doctor has been coming to the Ward 13 health centre for three weeks. Medicines are not available either.',
+    summaryEn: 'Ward 13 health centre: no doctor for three weeks, no medicines',
+    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+    source: 'Phone', submittedBy: 'Iqbal Mansuri', minutesAgo: 560,
+  },
+  {
+    id: 'nc-027', issueId: 'ngp-health-13',
+    textOriginal: 'The Ward 13 PHC at Besa has had no doctor for three weeks and the medicine cupboard is empty. Fever patients are told to go to the city hospital, 20 km away.',
+    language: 'English',
+    translationEn: 'The Ward 13 PHC at Besa has had no doctor for three weeks and the medicine cupboard is empty. Fever patients are told to go to the city hospital, 20 km away.',
+    summaryEn: 'Besa PHC empty of doctor and medicines; patients sent 20 km',
+    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+    source: 'App', submittedBy: 'Gajanan Charde', minutesAgo: 410,
+  },
+  {
+    id: 'nc-028', issueId: 'ngp-health-13',
+    textOriginal: 'Besa PHC Ward 13 me doctor teen hafte se nahi aa rahe. BP ki goli bhi nahi milti, bukhar walo ko sheher bhejna padta hai.',
+    language: 'Hinglish',
+    translationEn: 'No doctor has been coming to the Besa PHC in Ward 13 for three weeks. Even BP tablets are unavailable; fever patients have to be sent to the city.',
+    summaryEn: 'Besa PHC: no doctor, no BP medicines for three weeks',
+    category: 'Health', urgency: 4, ward: 'Ward 13', location: 'Besa PHC, Ward 13',
+    source: 'WhatsApp', submittedBy: 'Rekha Bagade', minutesAgo: 150,
   },
 
   // ── Streetlights, Ward 3 ──
@@ -368,10 +452,15 @@ const NAGPUR_LIVE_POOL: LivePoolItem[] = [
     text: 'हुडकेश्वरमध्ये आजही पाणी नाही. संपूर्ण वसाहत टाकीकडे बघत बसली आहे. वॉर्ड ५.',
     source: 'WhatsApp', submittedBy: 'Meena Kalambe',
   },
-  // mandi grows 2 → 3
+  // mandi grows 4 → 5 (a fifth farmer — inference from "पिकाची … मंडीला";
+  // farmer cluster priority visibly ticks up: 22.4 → 28)
   {
     text: 'कालमना मंडी का रास्ता बारिश में और बिगड़ गया। वार्ड 15, कृपया देखें।',
     source: 'WhatsApp', submittedBy: 'Rafiq Qureshi',
+  },
+  {
+    text: 'माझी सोयाबीण पिकाची ट्रॉली आजही कळमण्या मंडीला जाऊ शकली नाही. वॉर्ड १५ चा रस्ता पाहा.',
+    source: 'Phone', submittedBy: 'Rahul Khobragade',
   },
 ];
 

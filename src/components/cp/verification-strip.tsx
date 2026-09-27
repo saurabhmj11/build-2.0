@@ -37,8 +37,15 @@ export function VerificationStrip({ summary }: VerificationStripProps) {
           {summary.disputedCompletions === 1 ? '' : 's'}
         </span>
       )}
+      {summary.farmerWeighted > 0 && (
+        <span className="font-semibold text-lime-400">
+          🌾 {summary.farmerWeighted} farmer-weighted{' '}
+          {summary.farmerWeighted === 1 ? 'issue' : 'issues'}
+        </span>
+      )}
       <span className="ml-auto text-[10px] text-gray-600">
-        Intake design: phone-OTP verified citizens + rate limits — one citizen, one vote
+        Priority = distinct citizens × urgency × occupation weight — phone-OTP
+        intake, one citizen one vote
       </span>
     </section>
   );

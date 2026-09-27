@@ -66,6 +66,11 @@ export function maskSubmitterId(submitterId: string): string {
   return submitterId.length > 6 ? `${submitterId.slice(0, 4)}…` : submitterId;
 }
 
+/** Priority score can be fractional after occupation weighting (e.g. 22.4). */
+export function formatPriority(p: number): string {
+  return Number.isInteger(p) ? String(p) : p.toFixed(1);
+}
+
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.max(0, Math.floor(diff / 60_000));

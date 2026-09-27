@@ -7,8 +7,10 @@ import {
   IssueView,
   MpladsRecord,
   Report,
+  SubmitterProfile,
   Urgency,
 } from './types';
+import { categoryWeight, inferFarmerFromText } from './profile';
 
 const LLM_TIMEOUT_CLASSIFY_MS = 45_000;
 const LLM_TIMEOUT_REPORT_MS = 90_000;
@@ -67,6 +69,8 @@ export interface ClassifyResult {
   language: string;
   translationEn: string;
   summaryEn: string;
+  /** Module 5 — inferred from the complaint text (declared overrides upstream) */
+  submitterProfile: SubmitterProfile;
   matchedIssueId: string | null;
   aiClassified: boolean;
 }
@@ -91,11 +95,12 @@ JOB 1 — CLASSIFY. Return:
 - "language": name of the language the complaint is written in
 - "translationEn": faithful English translation
 - "summary_en": ONE-line neutral English summary (max 12 words)
+- "submitter_profile": "farmer" if the complainant clearly describes a farming livelihood — mentions OWN crops, harvest, taking produce to the mandi, tractor/trolley transport, field work (e.g. "my crop", "फसल", "मंडी", "शेतकरी", "ऊस") — else "general". Do NOT infer farmer from generic words like "road" or "market" alone.
 
 JOB 2 — CLUSTER MATCH. Compare against the existing issues list. If this complaint is about the SAME underlying problem as an existing issue (same ward/area AND same category of infrastructure problem — different wording, language, or severity still counts as the same issue), set "matched_issue_id" to that id. If it is genuinely a new problem, set it to null.
 
 Return ONLY valid JSON, no prose:
-{"category":"...","urgency":N,"ward":"...","location":"...","language":"...","translationEn":"...","summary_en":"...","matched_issue_id":null,"match_reason":"..."}`;
+{"category":"...","urgency":N,"ward":"...","location":"...","language":"...","translationEn":"...","summary_en":"...","submitter_profile":"general","matched_issue_id":null,"match_reason":"..."}`;
 
     const user = `EXISTING ISSUES:\n${issuesBlock || '(none yet)'}\n\nNEW COMPLAINT:\n"""${text}"""`;
 
@@ -119,6 +124,8 @@ Return ONLY valid JSON, no prose:
     const matchedId = typeof parsed.matched_issue_id === 'string' ? parsed.matched_issue_id : null;
     const matchedValid =
       matchedId && existingIssues.some((i) => i.id === matchedId) ? matchedId : null;
+    const submitterProfile: SubmitterProfile =
+      parsed.submitter_profile === 'farmer' ? 'farmer' : 'general';
 
     return {
       category,
@@ -128,6 +135,7 @@ Return ONLY valid JSON, no prose:
       language: String(parsed.language || 'Unknown'),
       translationEn: String(parsed.translationEn || text),
       summaryEn: String(parsed.summary_en || String(parsed.translationEn || text)).slice(0, 120),
+      submitterProfile,
       matchedIssueId: matchedValid,
       aiClassified: true,
     };
@@ -174,7 +182,6 @@ export function heuristicClassify(text: string): Omit<ClassifyResult, 'matchedIs
       category = cat;
     }
   }
-
   // Ward extraction: latin + devanagari digits
   const wardMatch =
     t.match(/(?:ward|वार्ड|वॉर्ड|வார்டு)\s*[-:।]?\s*([0-9०-९]{1,2})/i) ??
@@ -216,6 +223,8 @@ export function heuristicClassify(text: string): Omit<ClassifyResult, 'matchedIs
     language,
     translationEn: text,
     summaryEn: text.slice(0, 100),
+    // Module 5 — multilingual signal words (crops, mandi, tractor…)
+    submitterProfile: inferFarmerFromText(text) ? 'farmer' : 'general',
   };
 }
 
@@ -336,6 +345,11 @@ function verificationContextBlock(issue: IssueView): string {
   const lines: string[] = [
     `- Distinct citizens: ${v.distinctSubmitters} of ${issue.count} total reports (priority ranking uses DISTINCT citizens — one citizen, one vote)`,
   ];
+  if (issue.profile === 'farmer') {
+    lines.push(
+      `- FARMER-WEIGHTED PRIORITY: ${issue.farmerCount} of ${issue.distinctCount} distinct complainants are identified farmers (self-declared at intake or inferred from their own words — crops, mandi, tractor). ${issue.category} carries a ×${issue.profileWeight} occupation weight for farmers (vs ×${categoryWeight('general', issue.category)} for general citizens); unweighted score ${issue.unweightedPriority} → weighted ${issue.priority}. Rationale: urgency windows differ by occupation — road damage in a harvest window blocks crop transport to the mandi, a hard seasonal deadline. Where relevant, the action plan should treat the harvest/mandi window as a time constraint, not an open-ended repair schedule.`,
+    );
+  }
   if (v.duplicateSubmitters.length > 0) {
     lines.push(
       `- Duplicate submissions (de-weighted): ${v.duplicateSubmitters
@@ -376,11 +390,15 @@ function fallbackReport(
   const disputeNote = issue.disputed
     ? ` DISPUTED COMPLETION: ${issue.disputeReason}`
     : '';
+  const farmerNote =
+    issue.profile === 'farmer'
+      ? ` ${issue.farmerCount} of ${issue.distinctCount} distinct complainants are identified farmers — the priority is occupation-weighted (${issue.category} ×${issue.profileWeight}, unweighted ${issue.unweightedPriority}): road damage in a harvest window blocks crop transport to the mandi, a time-bound income loss rather than a convenience issue.`
+      : '';
   return {
     issueId: issue.id,
     department,
     headline: `${issue.title} — ${v.distinctSubmitters} citizens affected in ${issue.ward}`,
-    executiveSummary: `${distinctNote}${coordinationNote}${disputeNote} The issue is rated urgency ${issue.urgency}/5 (verified priority score ${issue.priority}). ${mplads ? `A sanctioned MPLADS work (₹${mplads.amountLakh} lakh, ${mplads.status.toLowerCase()}) already exists against this issue${issue.disputed ? ' and its completion is disputed by ground reports' : ' and must be verified on the ground'}.` : 'No sanctioned MPLADS work is on record for this issue; it requires a fresh budget line.'}`,
+    executiveSummary: `${distinctNote}${coordinationNote}${disputeNote}${farmerNote} The issue is rated urgency ${issue.urgency}/5 (verified priority score ${issue.priority}). ${mplads ? `A sanctioned MPLADS work (₹${mplads.amountLakh} lakh, ${mplads.status.toLowerCase()}) already exists against this issue${issue.disputed ? ' and its completion is disputed by ground reports' : ' and must be verified on the ground'}.` : 'No sanctioned MPLADS work is on record for this issue; it requires a fresh budget line.'}`,
     actionPlan: issue.disputed
       ? [
           `Order a joint physical inspection of "${mplads!.workName}" (recorded completed ${mplads!.completionDate}) with ${mplads!.implementingAgency} — the office decides next steps after verifying the mismatch.`,

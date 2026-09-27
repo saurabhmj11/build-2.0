@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { IssueView, Report } from '@/lib/types';
-import { formatLakh, shortDate } from '@/lib/client-format';
+import { formatLakh, formatPriority, shortDate } from '@/lib/client-format';
 
 interface ReportDialogProps {
   issue: IssueView;
@@ -29,7 +29,7 @@ function reportToPlainText(r: Report, issue: IssueView): string {
     `Department : ${r.department}`,
     `Issue      : ${issue.title}`,
     `Ward       : ${issue.ward} (${issue.location})`,
-    `Scale      : ${issue.count} reports · ${issue.distinctCount} distinct citizens · urgency ${issue.urgency}/5 · verified priority ${issue.priority}`,
+    `Scale      : ${issue.count} reports · ${issue.distinctCount} distinct citizens · urgency ${issue.urgency}/5 · verified priority ${formatPriority(issue.priority)}${issue.profile === 'farmer' ? ` (farmer-weighted ×${issue.profileWeight}, unweighted ${formatPriority(issue.unweightedPriority)})` : ''}`,
     ``,
     `HEADLINE`,
     r.headline,
@@ -191,7 +191,10 @@ export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDial
                     <p className="mt-0.5 text-xs text-gray-600">
                       📍 {issue.ward} · {issue.location} — {issue.count} reports from{' '}
                       <b>{issue.distinctCount} distinct citizens</b>, urgency{' '}
-                      {issue.urgency}/5 · verified priority {issue.priority}
+                      {issue.urgency}/5 · verified priority{' '}
+                      {formatPriority(issue.priority)}
+                      {issue.profile === 'farmer' &&
+                        ` (farmer-weighted ×${issue.profileWeight} — unweighted ${formatPriority(issue.unweightedPriority)})`}
                     </p>
                   </header>
 
@@ -226,6 +229,7 @@ export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDial
                   {/* Verification layer note (paper-toned) */}
                   {(issue.disputed ||
                     issue.verification.coordinationSuspected ||
+                    issue.profile === 'farmer' ||
                     issue.distinctCount < issue.count) && (
                     <section
                       aria-label="Verification layer notes"
@@ -250,6 +254,19 @@ export function ReportDialog({ issue, constituencyId, onOpenChange }: ReportDial
                             complaints share near-identical templated wording across
                             different submitters. Cluster quarantined from ranking
                             pending review.
+                          </li>
+                        )}
+                        {issue.profile === 'farmer' && (
+                          <li>
+                            • 🌾 <b>{issue.farmerCount} of {issue.distinctCount}</b>{' '}
+                            distinct complainants are identified farmers — priority
+                            occupation-weighted ({issue.category} ×
+                            {issue.profileWeight}; unweighted score{' '}
+                            {formatPriority(issue.unweightedPriority)} →{' '}
+                            {formatPriority(issue.priority)}). Rationale: road
+                            damage in a harvest window blocks crop transport to
+                            the mandi — a time-bound income loss, not a
+                            convenience issue.
                           </li>
                         )}
                         {issue.disputed && (

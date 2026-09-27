@@ -41,6 +41,20 @@ function FeedItem({ complaint }: { complaint: Complaint }) {
         <span aria-hidden>{SOURCE_EMOJI[complaint.source] ?? '📱'} {complaint.source}</span>
         <span className="font-mono">{maskSubmitterId(complaint.submitterId)}</span>
         <span>{complaint.language}</span>
+        {complaint.submitterProfile === 'farmer' && (
+          <span
+            className="rounded-sm bg-lime-950/70 px-1 py-px font-bold text-lime-400 ring-1 ring-lime-800"
+            title={
+              complaint.profileSource === 'declared'
+                ? 'Occupation self-declared at intake'
+                : complaint.profileSource === 'inferred'
+                  ? 'Occupation inferred from the complaint text'
+                  : undefined
+            }
+          >
+            🌾 farmer
+          </span>
+        )}
         {complaint.aiClassified && (
           <span className="rounded-sm bg-amber-950/70 px-1 py-px font-bold text-amber-400 ring-1 ring-amber-800">
             AI

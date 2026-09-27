@@ -39,7 +39,7 @@ export default function Home() {
   // Restore deep link (?c=nagpur) on mount
   useEffect(() => {
     const c = new URLSearchParams(window.location.search).get('c');
-    if (isLiveConstituency(c)) selectConstituency(c);
+    if (c && isLiveConstituency(c)) selectConstituency(c);
     setHydrated(true);
   }, []);
 

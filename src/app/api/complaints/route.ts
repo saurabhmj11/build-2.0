@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
       submittedBy?: string;
       source?: string;
       constituencyId?: string;
+      /** Module 5 — self-declared occupation ('farmer' | 'general'); absent = infer from text */
+      submitterProfile?: string;
     };
 
     const constituencyId = body.constituencyId ?? 'nagpur';
@@ -47,11 +49,17 @@ export async function POST(req: NextRequest) {
       ? (body.source as 'WhatsApp' | 'Phone' | 'Letter' | 'Walk-in' | 'App' | 'Voice note')
       : 'App';
 
+    const declaredProfile =
+      body.submitterProfile === 'farmer' || body.submitterProfile === 'general'
+        ? body.submitterProfile
+        : undefined;
+
     const result = await processIncomingComplaint(
       constituencyId,
       text,
       source,
       (body.submittedBy ?? 'Anonymous citizen').trim() || 'Anonymous citizen',
+      declaredProfile,
     );
 
     return NextResponse.json({
